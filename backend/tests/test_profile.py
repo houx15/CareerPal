@@ -33,6 +33,18 @@ def test_profile_patch_persists_allowed_fields(client):
     assert client.get("/api/profile", headers=headers).json()["target_direction"] == "Backend SWE"
 
 
+def test_profile_patch_rejects_unknown_fields(client):
+    headers = auth_headers(client)
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"name": "Alex Chen", "user_id": "not-allowed", "created_at": "2026-05-03", "education": []},
+    )
+
+    assert response.status_code == 422
+
+
 def test_completeness_reflects_name_and_empty_sections(client):
     headers = auth_headers(client)
     client.patch("/api/profile", headers=headers, json={"name": "Alex Chen"})

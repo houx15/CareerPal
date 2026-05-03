@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProfileResponse(BaseModel):
@@ -16,6 +16,8 @@ class ProfileResponse(BaseModel):
 
 
 class ProfileUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str | None = None
     headline: str | None = None
     target_direction: str | None = None
