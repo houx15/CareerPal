@@ -11,14 +11,30 @@ from app.models import user  # noqa: F401
 
 
 @pytest.fixture
-def client():
+def engine():
     engine = create_engine(
         "sqlite://",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
-    TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
     Base.metadata.create_all(bind=engine)
+    yield engine
+    Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture
+def db_session(engine):
+    TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@pytest.fixture
+def client(engine):
+    TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
     def override_get_db():
         db = TestingSessionLocal()
@@ -34,4 +50,3 @@ def client():
         yield test_client
 
     app.dependency_overrides.clear()
-    Base.metadata.drop_all(bind=engine)
