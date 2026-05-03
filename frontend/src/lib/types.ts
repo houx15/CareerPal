@@ -1,0 +1,74 @@
+export interface User {
+  id: string;
+  email: string;
+  username: string;
+}
+
+export interface RegisterPayload {
+  email: string;
+  username: string;
+  password: string;
+}
+
+export interface LoginPayload {
+  email: string;
+  password: string;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: "bearer";
+  user: User;
+}
+
+export interface Profile {
+  name: string | null;
+  headline: string | null;
+  target_direction: string | null;
+  comment: string | null;
+  education: Record<string, unknown>[];
+  experience: Record<string, unknown>[];
+  projects: Record<string, unknown>[];
+  skills: Record<string, unknown>[];
+  certificates: Record<string, unknown>[];
+}
+
+export type ProfilePatch = Partial<Pick<Profile, "name" | "headline" | "target_direction" | "comment">>;
+
+export type CompletenessState = "empty" | "partial" | "complete";
+
+export interface ProfileCompleteness {
+  overall: CompletenessState;
+  sections: Record<string, CompletenessState>;
+}
+
+export type ConversationContextType = "career" | "page";
+export type ConversationRole = "user" | "assistant";
+
+export interface ConversationMessage {
+  role: ConversationRole;
+  content: string;
+}
+
+export interface StartConversationPayload {
+  context_type: ConversationContextType;
+  focus_node?: string | null;
+}
+
+export interface Conversation {
+  id: string;
+  context_type: ConversationContextType;
+  focus_node: string | null;
+  messages: ConversationMessage[];
+}
+
+export interface SendMessagePayload {
+  conversation_id: string;
+  content: string;
+}
+
+export interface SendMessageResponse {
+  conversation_id: string;
+  assistant_message: ConversationMessage;
+  messages: ConversationMessage[];
+}
