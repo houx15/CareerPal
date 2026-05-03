@@ -16,7 +16,10 @@ target_metadata = Base.metadata
 
 
 def get_database_url() -> str:
-    return config.get_main_option("sqlalchemy.url") or get_settings().database_url
+    alembic_url = config.get_main_option("sqlalchemy.url")
+    if alembic_url:
+        return alembic_url
+    return get_settings().database_url
 
 
 def run_migrations_offline() -> None:
