@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useMemo, useRef, useState } from "react";
 import { ApiClient } from "../lib/api";
 import type { ProfilePatch } from "../lib/types";
 import { AuthScreens } from "./AuthScreens";
@@ -36,6 +36,9 @@ export function StageApp({ api }: StageAppProps) {
   const [profile, setProfile] = useState<WorkspaceProfile | null>(null);
   const [completeness, setCompleteness] = useState<WorkspaceCompleteness | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
+  const isLoadingWorkspaceRef = useRef(false);
+  const workspaceRequestIdRef = useRef(0);
 
   const client = useMemo<StageApi>(() => api ?? createBrowserApi(() => token), [api, token]);
 
@@ -53,15 +56,39 @@ export function StageApp({ api }: StageAppProps) {
   }
 
   async function loadWorkspace() {
+    if (isLoadingWorkspaceRef.current) {
+      return;
+    }
+
+    isLoadingWorkspaceRef.current = true;
+    const requestId = workspaceRequestIdRef.current + 1;
+    workspaceRequestIdRef.current = requestId;
+    setIsLoadingWorkspace(true);
     setWorkspaceError(null);
+
     try {
       const [nextProfile, nextCompleteness] = await Promise.all([client.getProfile(), client.getCompleteness()]);
+      if (workspaceRequestIdRef.current !== requestId) {
+        return;
+      }
+
       setProfile(nextProfile);
       setCompleteness(nextCompleteness);
       await client.startConversation?.({ context_type: "career", focus_node: null });
+      if (workspaceRequestIdRef.current !== requestId) {
+        return;
+      }
+
       setStage("workspace");
     } catch (caught) {
-      setWorkspaceError(caught instanceof Error ? caught.message : "Could not load your workspace.");
+      if (workspaceRequestIdRef.current === requestId) {
+        setWorkspaceError(caught instanceof Error ? caught.message : "Could not load your workspace.");
+      }
+    } finally {
+      if (workspaceRequestIdRef.current === requestId) {
+        isLoadingWorkspaceRef.current = false;
+        setIsLoadingWorkspace(false);
+      }
     }
   }
 
@@ -70,6 +97,9 @@ export function StageApp({ api }: StageAppProps) {
     setToken(null);
     setProfile(null);
     setCompleteness(null);
+    setIsLoadingWorkspace(false);
+    isLoadingWorkspaceRef.current = false;
+    workspaceRequestIdRef.current += 1;
     setStage("intro");
   }
 
@@ -93,7 +123,7 @@ export function StageApp({ api }: StageAppProps) {
   if (stage === "onboarding") {
     return (
       <>
-        <OnboardingScreen onShowWorkspace={loadWorkspace} />
+        <OnboardingScreen isLoading={isLoadingWorkspace} onShowWorkspace={loadWorkspace} />
         {workspaceError ? <p className="floating-error">{workspaceError}</p> : null}
       </>
     );

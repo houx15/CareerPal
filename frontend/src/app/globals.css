@@ -224,6 +224,12 @@ input:focus {
   transform: translateX(-50%);
 }
 
+.loading-status {
+  color: var(--ink-3);
+  font-weight: 650;
+  justify-self: end;
+}
+
 .chat-column {
   display: grid;
   gap: 16px;
