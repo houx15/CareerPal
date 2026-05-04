@@ -18,6 +18,30 @@ describe("ApiClient", () => {
     });
   });
 
+  it("uses the global fetch binding safely when no fetcher is injected", async () => {
+    const originalFetch = globalThis.fetch;
+    const response = {
+      ok: true,
+      status: 200,
+      json: async () => ({ email: "alex@example.com" }),
+    };
+    const fetchMock = vi.fn(function (this: typeof globalThis) {
+      if (this !== globalThis) {
+        throw new TypeError("Illegal invocation");
+      }
+      return Promise.resolve(response);
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    try {
+      const client = new ApiClient("http://api.test", () => "token-123");
+
+      await expect(client.me()).resolves.toEqual({ email: "alex@example.com" });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it("throws ApiError with backend detail", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false,

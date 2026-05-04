@@ -29,7 +29,7 @@ export class ApiClient {
   constructor(
     private readonly baseUrl: string,
     private readonly getToken: TokenProvider = () => null,
-    private readonly fetcher: typeof fetch = fetch,
+    private readonly fetcher: typeof fetch = (input, init) => globalThis.fetch(input, init),
   ) {}
 
   register(payload: RegisterPayload): Promise<AuthResponse> {
