@@ -18,6 +18,7 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    public readonly detail?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -85,22 +86,57 @@ export class ApiClient {
     });
 
     if (!response.ok) {
-      throw new ApiError(response.status, await this.errorMessage(response));
+      const error = await this.errorPayload(response);
+      throw new ApiError(response.status, error.message, error.detail);
     }
 
     return (await response.json()) as T;
   }
 
-  private async errorMessage(response: Response): Promise<string> {
+  private async errorPayload(response: Response): Promise<{ message: string; detail?: unknown }> {
     try {
       const data = (await response.json()) as { detail?: unknown };
-      return typeof data.detail === "string" ? data.detail : `Request failed with status ${response.status}`;
+      return {
+        message: this.detailMessage(data.detail) ?? `Request failed with status ${response.status}`,
+        detail: typeof data.detail === "string" ? undefined : data.detail,
+      };
     } catch {
-      return `Request failed with status ${response.status}`;
+      return { message: `Request failed with status ${response.status}` };
     }
   }
 
   private url(path: string): string {
     return `${this.baseUrl.replace(/\/$/, "")}${path}`;
+  }
+
+  private detailMessage(detail: unknown): string | null {
+    if (typeof detail === "string") {
+      return detail;
+    }
+
+    if (Array.isArray(detail)) {
+      const messages = detail.map((item) => this.validationMessage(item)).filter((message) => message !== null);
+      return messages.length > 0 ? messages.join("; ") : null;
+    }
+
+    return null;
+  }
+
+  private validationMessage(item: unknown): string | null {
+    if (!item || typeof item !== "object") {
+      return null;
+    }
+
+    const { loc, msg } = item as { loc?: unknown; msg?: unknown };
+    if (typeof msg !== "string") {
+      return null;
+    }
+
+    if (!Array.isArray(loc) || loc.length === 0) {
+      return msg;
+    }
+
+    const field = loc[loc.length - 1];
+    return typeof field === "string" || typeof field === "number" ? `${field}: ${msg}` : msg;
   }
 }

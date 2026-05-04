@@ -30,4 +30,26 @@ describe("ApiClient", () => {
       new ApiError(409, "Email is already registered"),
     );
   });
+
+  it("preserves FastAPI validation details with field-aware message", async () => {
+    const detail = [
+      { type: "missing", loc: ["body", "email"], msg: "Field required", input: {} },
+      {
+        type: "string_too_short",
+        loc: ["body", "password"],
+        msg: "String should have at least 8 characters",
+        input: "x",
+      },
+    ];
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 422,
+      json: async () => ({ detail }),
+    });
+    const client = new ApiClient("http://api.test", () => null, fetchMock as typeof fetch);
+
+    await expect(client.register({ email: "", username: "alex", password: "x" })).rejects.toEqual(
+      new ApiError(422, "email: Field required; password: String should have at least 8 characters", detail),
+    );
+  });
 });
