@@ -42,10 +42,17 @@
 - No production behavior changes without a failing test first.
 - Tests should verify observable behavior, not internal wiring. Mock only external boundaries when necessary.
 - Complete work in small batches: failing test, minimal implementation, passing test, refactor while green.
+- npm is the canonical frontend package manager for this repo unless the project explicitly switches package managers later.
 - Expected test commands after scaffolding:
-  - Frontend: `cd frontend && pnpm test --run`
+  - Frontend: `cd frontend && npm test -- --run`
   - Backend: `cd backend && pytest`
-  - Full suite: `cd frontend && pnpm test --run && cd ../backend && pytest`
+  - Full suite: `cd frontend && npm test -- --run && cd ../backend && pytest`
+
+## Frontend Commands
+
+- Tests: `cd frontend && npm test -- --run`
+- Dev server: `cd frontend && npm run dev`
+- Build: `cd frontend && npm run build`
 
 ## Completion Checks
 

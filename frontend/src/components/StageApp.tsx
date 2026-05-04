@@ -32,7 +32,6 @@ const TOKEN_KEY = "careerpal.accessToken";
 
 export function StageApp({ api }: StageAppProps) {
   const [stage, setStage] = useState<Stage>("intro");
-  const [token, setToken] = useState(() => readStoredToken());
   const [profile, setProfile] = useState<WorkspaceProfile | null>(null);
   const [completeness, setCompleteness] = useState<WorkspaceCompleteness | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
@@ -40,14 +39,18 @@ export function StageApp({ api }: StageAppProps) {
   const isLoadingWorkspaceRef = useRef(false);
   const workspaceRequestIdRef = useRef(0);
 
-  const client = useMemo<StageApi>(() => api ?? createBrowserApi(() => token), [api, token]);
+  const client = useMemo<StageApi>(() => api ?? createBrowserApi(readStoredToken), [api]);
 
   async function handleAuth(action: "register" | "login", payload: AuthPayload | LoginPayload) {
     const result =
       action === "register" ? await client.register(payload as AuthPayload) : await client.login(payload as LoginPayload);
     storeToken(result.access_token);
-    setToken(result.access_token);
-    setStage("name");
+    if (action === "register") {
+      setStage("name");
+      return;
+    }
+
+    await loadWorkspace();
   }
 
   async function handleName(name: string) {
@@ -94,7 +97,6 @@ export function StageApp({ api }: StageAppProps) {
 
   function handleLogout() {
     storeToken(null);
-    setToken(null);
     setProfile(null);
     setCompleteness(null);
     setIsLoadingWorkspace(false);

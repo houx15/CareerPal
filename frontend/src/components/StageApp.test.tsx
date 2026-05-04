@@ -67,6 +67,23 @@ describe("StageApp", () => {
     expect(screen.getByText(/profile completion/i)).toBeInTheDocument();
   });
 
+  it("loads existing users directly into the workspace after login", async () => {
+    const api = apiMock();
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /get started/i }));
+    await userEvent.click(screen.getByRole("button", { name: /i already have an account/i }));
+    await userEvent.type(screen.getByLabelText(/email/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/password/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+
+    await waitFor(() => expect(api.login).toHaveBeenCalledWith({ email: "alex@example.com", password: "secret123" }));
+    await waitFor(() => expect(api.getProfile).toHaveBeenCalled());
+    expect(await screen.findByText(/Alex Chen/)).toBeInTheDocument();
+    expect(screen.getByText(/profile completion/i)).toBeInTheDocument();
+    expect(screen.queryByText(/what should i call you/i)).not.toBeInTheDocument();
+  });
+
   it("ignores repeated workspace clicks while the first load is pending", async () => {
     const api = apiMock();
     const profileLoad = deferred<Awaited<ReturnType<typeof api.getProfile>>>();

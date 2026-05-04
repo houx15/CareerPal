@@ -1,3 +1,6 @@
+from datetime import datetime
+
+
 def auth_headers(client):
     response = client.post(
         "/api/auth/register",
@@ -31,6 +34,17 @@ def test_profile_patch_persists_allowed_fields(client):
     assert response.status_code == 200
     assert response.json()["name"] == "Alex Chen"
     assert client.get("/api/profile", headers=headers).json()["target_direction"] == "Backend SWE"
+
+
+def test_profile_patch_updates_updated_at(client):
+    headers = auth_headers(client)
+    before = client.get("/api/profile", headers=headers).json()["updated_at"]
+
+    response = client.patch("/api/profile", headers=headers, json={"name": "Alex Chen"})
+
+    assert response.status_code == 200
+    after = response.json()["updated_at"]
+    assert datetime.fromisoformat(after) > datetime.fromisoformat(before)
 
 
 def test_profile_patch_rejects_unknown_fields(client):

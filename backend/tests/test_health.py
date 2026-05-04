@@ -14,6 +14,20 @@ def test_health_returns_ok(client):
     assert response.json() == {"status": "ok", "service": "careerpal-backend"}
 
 
+def test_local_frontend_can_preflight_login(client):
+    response = client.options(
+        "/api/auth/login",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+
+    assert response.status_code in {200, 204}
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+
 def test_initial_migration_exists():
     migration = Path("alembic/versions/0001_initial.py")
 
@@ -35,6 +49,8 @@ def test_initial_migration_creates_fresh_database(tmp_path):
         inspector = inspect(engine)
 
         assert set(inspector.get_table_names()) >= {"users", "profiles", "conversations"}
+        assert "updated_at" in {column["name"] for column in inspector.get_columns("users")}
+        assert "updated_at" in {column["name"] for column in inspector.get_columns("profiles")}
         assert {column["name"] for column in inspector.get_columns("conversations")} == {
             "id",
             "user_id",

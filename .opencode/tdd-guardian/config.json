@@ -5,8 +5,8 @@
   "gateFreshnessMinutes": 120,
   "bypassEnv": "TDD_GUARD_BYPASS",
   "preflightCommand": "",
-  "testCommand": "sh -c 'cd frontend && pnpm test --run && cd ../backend && pytest'",
-  "coverageCommand": "sh -c 'cd frontend && pnpm test --run --coverage && cd ../backend && pytest --cov=app --cov-report=term --cov-report=json'",
+  "testCommand": "sh -c 'cd frontend && npm test -- --run && cd ../backend && pytest'",
+  "coverageCommand": "sh -c 'cd frontend && npm test -- --run --coverage && cd ../backend && pytest --cov=app --cov-report=term --cov-report=json'",
   "coverageSummaryPath": "frontend/coverage/coverage-summary.json",
   "coverageThresholds": {
     "lines": 100,

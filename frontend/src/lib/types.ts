@@ -22,6 +22,7 @@ export interface AuthResponse {
 }
 
 export interface Profile {
+  updated_at: string;
   name: string | null;
   headline: string | null;
   target_direction: string | null;

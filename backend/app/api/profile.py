@@ -11,6 +11,7 @@ router = APIRouter(prefix="/profile", tags=["profile"])
 
 def _profile_response(profile: Profile) -> ProfileResponse:
     return ProfileResponse(
+        updated_at=profile.updated_at,
         name=profile.name,
         headline=profile.headline,
         target_direction=profile.target_direction,
