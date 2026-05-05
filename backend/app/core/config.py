@@ -11,7 +11,12 @@ class Settings(BaseSettings):
     secret_key: str = DEFAULT_DEVELOPMENT_SECRET
     access_token_expire_minutes: int = 60
     environment: str = "local"
-    cors_origins: list[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
+    cors_origins: list[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ]
 
     model_config = SettingsConfigDict(env_prefix="CAREERPAL_", env_file=".env", extra="ignore")
 

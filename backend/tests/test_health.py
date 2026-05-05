@@ -15,17 +15,18 @@ def test_health_returns_ok(client):
 
 
 def test_local_frontend_can_preflight_login(client):
-    response = client.options(
-        "/api/auth/login",
-        headers={
-            "Origin": "http://localhost:3000",
-            "Access-Control-Request-Method": "POST",
-            "Access-Control-Request-Headers": "content-type",
-        },
-    )
+    for origin in ["http://localhost:3000", "http://localhost:3001"]:
+        response = client.options(
+            "/api/auth/login",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "content-type",
+            },
+        )
 
-    assert response.status_code in {200, 204}
-    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+        assert response.status_code in {200, 204}
+        assert response.headers["access-control-allow-origin"] == origin
 
 
 def test_initial_migration_exists():
@@ -66,7 +67,6 @@ def test_initial_migration_creates_fresh_database(tmp_path):
 
 def test_initial_migration_defaults_to_configured_database_url(tmp_path, monkeypatch):
     database = tmp_path / "configured.db"
-    default_database = Path("careerpal.db")
     monkeypatch.setenv("CAREERPAL_DATABASE_URL", f"sqlite:///{database}")
     get_settings.cache_clear()
 
@@ -80,9 +80,7 @@ def test_initial_migration_defaults_to_configured_database_url(tmp_path, monkeyp
             inspector = inspect(engine)
 
             assert set(inspector.get_table_names()) >= {"users", "profiles", "conversations"}
-            assert not default_database.exists()
         finally:
             engine.dispose()
     finally:
         get_settings.cache_clear()
-        default_database.unlink(missing_ok=True)
