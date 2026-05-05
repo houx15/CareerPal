@@ -1,4 +1,4 @@
-type SlimeState = "idle" | "listening" | "waiting" | "thinking" | "speaking" | "answering" | "happy" | "sleeping";
+export type SlimeState = "idle" | "listening" | "waiting" | "thinking" | "speaking" | "answering" | "happy" | "sleeping";
 
 const SLIME_FILL = "#5367F3";
 const SLIME_DARK = "#0B123D";

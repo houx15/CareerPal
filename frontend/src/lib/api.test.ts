@@ -31,7 +31,7 @@ describe("ApiClient", () => {
       }
       return Promise.resolve(response);
     });
-    globalThis.fetch = fetchMock as typeof fetch;
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     try {
       const client = new ApiClient("http://api.test", () => "token-123");

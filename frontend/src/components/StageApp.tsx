@@ -6,7 +6,7 @@ import { ApiClient } from "../lib/api";
 import type { ProfilePatch } from "../lib/types";
 import { LoginScreen, NameIntro, SignUpScreen } from "./AuthScreens";
 import { IntroPage } from "./IntroPage";
-import { OnboardingScreen } from "./OnboardingScreen";
+import { Onboarding } from "./Onboarding";
 import { Workspace, type WorkspaceCompleteness, type WorkspaceProfile } from "./Workspace";
 
 type AuthPayload = { email: string; username: string; password: string };
@@ -28,6 +28,7 @@ interface StageAppProps {
 }
 
 type Stage = "intro" | "login" | "signup" | "name" | "onboarding" | "workspace";
+type SessionUser = { name: string; initials: string; email: string };
 
 const TOKEN_KEY = "careerpal.accessToken";
 
@@ -45,6 +46,8 @@ function StageAppInner({ api }: StageAppProps) {
   const [completeness, setCompleteness] = useState<WorkspaceCompleteness | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const isLoadingWorkspaceRef = useRef(false);
   const workspaceRequestIdRef = useRef(0);
 
@@ -54,6 +57,7 @@ function StageAppInner({ api }: StageAppProps) {
     const result =
       action === "register" ? await client.register(payload as AuthPayload) : await client.login(payload as LoginPayload);
     storeToken(result.access_token);
+    setPendingEmail(result.user.email);
     if (action === "register") {
       setStage("name");
       return;
@@ -64,6 +68,7 @@ function StageAppInner({ api }: StageAppProps) {
 
   async function handleName(name: string) {
     await client.patchProfile({ name });
+    setSessionUser({ name, initials: initialsForName(name), email: pendingEmail });
     setStage("onboarding");
   }
 
@@ -108,6 +113,8 @@ function StageAppInner({ api }: StageAppProps) {
     storeToken(null);
     setProfile(null);
     setCompleteness(null);
+    setPendingEmail("");
+    setSessionUser(null);
     setIsLoadingWorkspace(false);
     isLoadingWorkspaceRef.current = false;
     workspaceRequestIdRef.current += 1;
@@ -147,7 +154,11 @@ function StageAppInner({ api }: StageAppProps) {
   if (stage === "onboarding") {
     return (
       <>
-        <OnboardingScreen isLoading={isLoadingWorkspace} onShowWorkspace={loadWorkspace} />
+        <Onboarding
+          user={sessionUser ?? { name: "CareerPal user", initials: "CU", email: pendingEmail }}
+          isLoading={isLoadingWorkspace}
+          onDone={loadWorkspace}
+        />
         {workspaceError ? <p className="floating-error">{workspaceError}</p> : null}
       </>
     );
@@ -192,4 +203,15 @@ function storeToken(nextToken: string | null) {
 function usernameFromEmail(email: string): string {
   const prefix = email.split("@")[0] || "user";
   return prefix.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "user";
+}
+
+function initialsForName(name: string): string {
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
+  return initials || "CU";
 }
