@@ -9,6 +9,7 @@ htmlcov/
 node_modules/
 .next/
 dist/
+.worktrees/
 .env
 .env.*
 !.env.example
