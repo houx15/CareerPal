@@ -1,10 +1,11 @@
 "use client";
 
-import { type FormEvent, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { LangProvider } from "../i18n/LangProvider";
 import { ApiClient } from "../lib/api";
 import type { ProfilePatch } from "../lib/types";
-import { AuthScreens } from "./AuthScreens";
-import { IntroScreen } from "./IntroScreen";
+import { LoginScreen, NameIntro, SignUpScreen } from "./AuthScreens";
+import { IntroPage } from "./IntroPage";
 import { OnboardingScreen } from "./OnboardingScreen";
 import { Workspace, type WorkspaceCompleteness, type WorkspaceProfile } from "./Workspace";
 
@@ -26,11 +27,19 @@ interface StageAppProps {
   api?: StageApi;
 }
 
-type Stage = "intro" | "auth" | "name" | "onboarding" | "workspace";
+type Stage = "intro" | "login" | "signup" | "name" | "onboarding" | "workspace";
 
 const TOKEN_KEY = "careerpal.accessToken";
 
 export function StageApp({ api }: StageAppProps) {
+  return (
+    <LangProvider>
+      <StageAppInner api={api} />
+    </LangProvider>
+  );
+}
+
+function StageAppInner({ api }: StageAppProps) {
   const [stage, setStage] = useState<Stage>("intro");
   const [profile, setProfile] = useState<WorkspaceProfile | null>(null);
   const [completeness, setCompleteness] = useState<WorkspaceCompleteness | null>(null);
@@ -106,20 +115,33 @@ export function StageApp({ api }: StageAppProps) {
   }
 
   if (stage === "intro") {
-    return <IntroScreen onGetStarted={() => setStage("auth")} />;
+    return <IntroPage onGetStarted={() => setStage("signup")} onSignIn={() => setStage("login")} />;
   }
 
-  if (stage === "auth") {
+  if (stage === "login") {
     return (
-      <AuthScreens
-        onRegister={(payload) => handleAuth("register", payload)}
+      <LoginScreen
+        onBack={() => setStage("intro")}
         onLogin={(payload) => handleAuth("login", payload)}
+        onGoSignup={() => setStage("signup")}
+      />
+    );
+  }
+
+  if (stage === "signup") {
+    return (
+      <SignUpScreen
+        onBack={() => setStage("intro")}
+        onComplete={(payload) =>
+          handleAuth("register", { email: payload.email, username: usernameFromEmail(payload.email), password: payload.password })
+        }
+        onGoLogin={() => setStage("login")}
       />
     );
   }
 
   if (stage === "name") {
-    return <NameScreen onSubmit={handleName} />;
+    return <NameIntro onSubmit={handleName} />;
   }
 
   if (stage === "onboarding") {
@@ -136,50 +158,6 @@ export function StageApp({ api }: StageAppProps) {
   }
 
   return <Workspace profile={profile} completeness={completeness} onLogout={handleLogout} />;
-}
-
-function NameScreen({ onSubmit }: { onSubmit: (name: string) => Promise<void> }) {
-  const [name, setName] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setIsSubmitting(true);
-
-    try {
-      await onSubmit(name);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Could not save your name.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <main className="auth-shell">
-      <form className="auth-card" onSubmit={handleSubmit}>
-        <p className="eyebrow">First, a name</p>
-        <h1>What should I call you?</h1>
-        <label>
-          Your name
-          <input
-            autoComplete="name"
-            name="name"
-            onChange={(event) => setName(event.target.value)}
-            required
-            type="text"
-            value={name}
-          />
-        </label>
-        {error ? <p className="form-error">{error}</p> : null}
-        <button className="btn btn-accent" disabled={isSubmitting} type="submit">
-          Nice to meet you
-        </button>
-      </form>
-    </main>
-  );
 }
 
 export function defaultApiBaseUrl(): string {
@@ -209,4 +187,9 @@ function storeToken(nextToken: string | null) {
   } else {
     window.localStorage.removeItem(TOKEN_KEY);
   }
+}
+
+function usernameFromEmail(email: string): string {
+  const prefix = email.split("@")[0] || "user";
+  return prefix.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "user";
 }

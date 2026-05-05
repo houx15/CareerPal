@@ -35,36 +35,56 @@ export function Workspace({ profile, completeness, onLogout }: WorkspaceProps) {
   const name = profile.name || "Your profile";
 
   return (
-    <main className="workspace-shell">
-      <section className="workspace-main" aria-labelledby="workspace-title">
-        <div className="workspace-topline">
-          <p className="eyebrow">CareerPal workspace</p>
+    <main className="app-shell">
+      <header className="app-bar">
+        <div className="app-bar-left">
+          <div className="app-bar-brand">CareerPal</div>
+          <nav className="app-nav">
+            {["Profile", "Match", "My resume", "Grow", "Activity"].map((label, index) => (
+              <button className={`app-nav-btn${index === 0 ? " active" : ""}`} type="button" key={label}>
+                {label}
+              </button>
+            ))}
+          </nav>
+        </div>
+        <div className="app-bar-right">
           <button className="btn btn-text" type="button" onClick={onLogout}>
             Log out
           </button>
         </div>
-        <h1 id="workspace-title">{name}</h1>
-        <p className="workspace-subtitle">{profile.headline || "Let CareerPal turn your background into a living profile."}</p>
-        {profile.target_direction ? <p className="target-pill">{profile.target_direction}</p> : null}
-        <div className="chat-column workspace-chat" aria-label="CareerPal conversation">
-          <div className="chat-bubble assistant">
-            I have started your workspace. Tell me about one project, role, class, or achievement you want this profile
-            to remember.
+      </header>
+      <section className="page-pad" aria-labelledby="workspace-title">
+        <div className="profile-hero">
+          <div>
+            <h1 id="workspace-title" style={{ fontFamily: "var(--serif)", margin: 0 }}>
+              {name}
+            </h1>
+            <div style={{ color: "var(--ink-3)", fontSize: 15, marginTop: 4 }}>
+              {profile.headline || "Let CareerPal turn your background into a living profile."}
+            </div>
+            {profile.target_direction ? <div className="target-pill" style={{ marginTop: 10 }}>{profile.target_direction}</div> : null}
+          </div>
+          <div>
+            <div style={{ fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: "var(--muted)", fontWeight: 500 }}>
+              Profile completion
+            </div>
+            <div style={{ fontFamily: "var(--serif)", fontSize: 22 }}>Overall: {completeness.overall}</div>
           </div>
         </div>
-      </section>
-      <aside className="side-panel" aria-label="Profile completion">
-        <h2>Profile completion</h2>
-        <p className="overall-state">Overall: {completeness.overall}</p>
-        <dl className="completion-list">
+        <div className="profile-grid">
           {Object.entries(completeness.sections).map(([key, state]) => (
-            <div className="completion-row" key={key}>
-              <dt>{SECTION_LABELS[key] ?? titleize(key)}</dt>
-              <dd>{state}</dd>
-            </div>
+            <article className="profile-card" key={key}>
+              <div className="profile-card-head">
+                <div className="profile-card-icon">◆</div>
+                <div>
+                  <div className="profile-card-title">{SECTION_LABELS[key] ?? titleize(key)}</div>
+                  <div className={`profile-card-state ${state}`}>{state}</div>
+                </div>
+              </div>
+            </article>
           ))}
-        </dl>
-      </aside>
+        </div>
+      </section>
     </main>
   );
 }

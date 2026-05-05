@@ -13,9 +13,11 @@ function apiMock() {
       .mockResolvedValue({ access_token: "token-123", user: { id: "u1", email: "alex@example.com", username: "alex" } }),
     patchProfile: vi.fn().mockResolvedValue({ name: "Alex Chen" }),
     getProfile: vi.fn().mockResolvedValue({
+      updated_at: "2026-05-05T00:00:00Z",
       name: "Alex Chen",
       headline: null,
       target_direction: null,
+      comment: null,
       education: [],
       experience: [],
       projects: [],
@@ -49,42 +51,57 @@ describe("StageApp", () => {
     expect(defaultApiBaseUrl()).toBe("");
   });
 
-  it("preserves signup -> name -> onboarding -> workspace flow", async () => {
+  it("preserves prototype signup -> name -> onboarding -> workspace flow", async () => {
     const api = apiMock();
     render(<StageApp api={api} />);
 
-    await userEvent.click(screen.getByRole("button", { name: /get started/i }));
-    await userEvent.type(screen.getByLabelText(/email/i), "alex@example.com");
-    await userEvent.type(screen.getByLabelText(/username/i), "alex");
-    await userEvent.type(screen.getByLabelText(/password/i), "secret123");
-    await userEvent.click(screen.getByRole("button", { name: /create account/i }));
+    await userEvent.click(screen.getByRole("button", { name: /start free/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.click(screen.getByRole("button", { name: /send code/i }));
+    await userEvent.type(screen.getByLabelText(/verification code/i), "123456");
+    await userEvent.click(screen.getByRole("button", { name: /^next/i }));
+
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.type(screen.getByLabelText(/password ✓/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /^next/i }));
+
+    await userEvent.type(screen.getByLabelText(/phone number/i), "+1 555 123 4567");
+    await userEvent.click(screen.getByRole("button", { name: /send code/i }));
+    await userEvent.type(screen.getByLabelText(/verification code/i), "654321");
+    await userEvent.click(screen.getByRole("button", { name: /verify/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /continue/i }));
 
     expect(await screen.findByText(/what should i call you/i)).toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText(/your name/i), "Alex Chen");
+    await userEvent.type(screen.getByPlaceholderText(/your name/i), "Alex Chen");
     await userEvent.click(screen.getByRole("button", { name: /nice to meet you/i }));
 
-    expect(await screen.findByText(/do you have a resume/i)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /show me my workspace/i }));
+    expect(await screen.findByText(/what brings you here today/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /i'll finish later/i }));
 
+    await waitFor(() =>
+      expect(api.register).toHaveBeenCalledWith({
+        email: "alex@example.com",
+        username: "alex",
+        password: "secret123",
+      }),
+    );
     await waitFor(() => expect(api.getProfile).toHaveBeenCalled());
-    expect(await screen.findByText(/Alex Chen/)).toBeInTheDocument();
-    expect(screen.getByText(/profile completion/i)).toBeInTheDocument();
+    expect(await screen.findByText(/profile completion/i)).toBeInTheDocument();
   });
 
-  it("loads existing users directly into the workspace after login", async () => {
+  it("loads existing users directly into the design-faithful workspace after login", async () => {
     const api = apiMock();
     render(<StageApp api={api} />);
 
-    await userEvent.click(screen.getByRole("button", { name: /get started/i }));
-    await userEvent.click(screen.getByRole("button", { name: /i already have an account/i }));
-    await userEvent.type(screen.getByLabelText(/email/i), "alex@example.com");
-    await userEvent.type(screen.getByLabelText(/password/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
     await userEvent.click(screen.getByRole("button", { name: /log in/i }));
 
     await waitFor(() => expect(api.login).toHaveBeenCalledWith({ email: "alex@example.com", password: "secret123" }));
     await waitFor(() => expect(api.getProfile).toHaveBeenCalled());
-    expect(await screen.findByText(/Alex Chen/)).toBeInTheDocument();
-    expect(screen.getByText(/profile completion/i)).toBeInTheDocument();
+    expect(await screen.findByText(/profile completion/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /my resume/i })).toBeInTheDocument();
     expect(screen.queryByText(/what should i call you/i)).not.toBeInTheDocument();
   });
 
@@ -96,22 +113,20 @@ describe("StageApp", () => {
 
     await reachOnboarding();
 
-    const workspaceButton = screen.getByRole("button", { name: /show me my workspace/i });
+    const workspaceButton = screen.getByRole("button", { name: /i'll finish later/i });
     await userEvent.click(workspaceButton);
     await userEvent.click(workspaceButton);
 
     expect(screen.getByRole("status")).toHaveTextContent(/loading workspace/i);
-    expect(screen.getByRole("heading", { name: /do you have a resume/i }).closest("section")).toHaveAttribute(
-      "aria-busy",
-      "true",
-    );
     expect(api.getProfile).toHaveBeenCalledTimes(1);
     expect(api.getCompleteness).toHaveBeenCalledTimes(1);
 
     profileLoad.resolve({
+      updated_at: "2026-05-05T00:00:00Z",
       name: "Alex Chen",
       headline: null,
       target_direction: null,
+      comment: null,
       education: [],
       experience: [],
       projects: [],
@@ -119,31 +134,27 @@ describe("StageApp", () => {
       certificates: [],
     });
     await waitFor(() => expect(api.startConversation).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText(/Alex Chen/)).toBeInTheDocument();
-  });
-
-  it("loads the workspace when choosing to add a resume later", async () => {
-    const api = apiMock();
-    render(<StageApp api={api} />);
-
-    await reachOnboarding();
-    await userEvent.click(screen.getByRole("button", { name: /i will add it later/i }));
-
-    await waitFor(() => expect(api.getProfile).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText(/Alex Chen/)).toBeInTheDocument();
-    expect(screen.getByText(/profile completion/i)).toBeInTheDocument();
+    expect(await screen.findByText(/profile completion/i)).toBeInTheDocument();
   });
 });
 
 async function reachOnboarding() {
-  await userEvent.click(screen.getByRole("button", { name: /get started/i }));
-  await userEvent.type(screen.getByLabelText(/email/i), "alex@example.com");
-  await userEvent.type(screen.getByLabelText(/username/i), "alex");
-  await userEvent.type(screen.getByLabelText(/password/i), "secret123");
-  await userEvent.click(screen.getByRole("button", { name: /create account/i }));
-  await userEvent.type(await screen.findByLabelText(/your name/i), "Alex Chen");
+  await userEvent.click(screen.getByRole("button", { name: /start free/i }));
+  await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+  await userEvent.click(screen.getByRole("button", { name: /send code/i }));
+  await userEvent.type(screen.getByLabelText(/verification code/i), "123456");
+  await userEvent.click(screen.getByRole("button", { name: /^next/i }));
+  await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+  await userEvent.type(screen.getByLabelText(/password ✓/i), "secret123");
+  await userEvent.click(screen.getByRole("button", { name: /^next/i }));
+  await userEvent.type(screen.getByLabelText(/phone number/i), "+1 555 123 4567");
+  await userEvent.click(screen.getByRole("button", { name: /send code/i }));
+  await userEvent.type(screen.getByLabelText(/verification code/i), "654321");
+  await userEvent.click(screen.getByRole("button", { name: /verify/i }));
+  await userEvent.click(await screen.findByRole("button", { name: /continue/i }));
+  await userEvent.type(await screen.findByPlaceholderText(/your name/i), "Alex Chen");
   await userEvent.click(screen.getByRole("button", { name: /nice to meet you/i }));
-  expect(await screen.findByText(/do you have a resume/i)).toBeInTheDocument();
+  expect(await screen.findByText(/what brings you here today/i)).toBeInTheDocument();
 }
 
 function deferred<T>() {
