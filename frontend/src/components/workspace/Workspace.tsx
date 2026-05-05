@@ -7,6 +7,11 @@ import { LangToggle, useLang } from "../../i18n/LangProvider";
 import { Slime } from "../Slime";
 import { ProfileDashboard, type ProfileSectionId } from "./ProfileDashboard";
 import { EditDrawer, ImproveChatOverlay } from "./WorkspaceOverlays";
+import { ResumeScreen } from "./ResumeScreen";
+import { MatchScreen } from "./MatchScreen";
+import { GrowScreen } from "./GrowScreen";
+import { ActivityScreen } from "./ActivityScreen";
+import { SettingsScreen } from "./SettingsScreen";
 
 export interface WorkspaceUser {
   name: string;
@@ -89,29 +94,17 @@ export function Workspace({ user, onLogout }: WorkspaceProps) {
         </div>
       </header>
 
-      {tab === "profile" ? (
-        <ProfileDashboard profile={profile} onImprove={() => setImproveSection("any")} onSection={setEditSection} />
-      ) : (
-        <PlaceholderScreen tab={tab} />
-      )}
+      {tab === "profile" ? <ProfileDashboard profile={profile} onImprove={() => setImproveSection("any")} onSection={setEditSection} /> : null}
+      {tab === "resume" ? <ResumeScreen profile={profile} onOpenMatch={() => setTab("match")} /> : null}
+      {tab === "match" ? <MatchScreen profile={profile} /> : null}
+      {tab === "grow" ? <GrowScreen /> : null}
+      {tab === "activity" ? <ActivityScreen /> : null}
+      {tab === "settings" ? <SettingsScreen onLogout={onLogout} /> : null}
 
       {improveSection ? <ImproveChatOverlay user={user} initialSection={improveSection} onClose={() => setImproveSection(null)} /> : null}
       {editSection ? (
         <EditDrawer section={editSection} profile={profile} onClose={() => setEditSection(null)} onChatInstead={openChatFromEdit} />
       ) : null}
     </main>
-  );
-}
-
-function PlaceholderScreen({ tab }: { tab: Tab }) {
-  const { t } = useLang();
-
-  return (
-    <section className="page-pad">
-      <div className="page-head">
-        <h1>{tab === "settings" ? t("nav_settings") : tab}</h1>
-        <p>Coming in the next frontend phase.</p>
-      </div>
-    </section>
   );
 }
