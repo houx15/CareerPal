@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { StageApp } from "./StageApp";
+import { defaultApiBaseUrl, StageApp } from "./StageApp";
 
 function apiMock() {
   return {
@@ -45,6 +45,10 @@ function apiMock() {
 }
 
 describe("StageApp", () => {
+  it("uses same-origin API requests by default", () => {
+    expect(defaultApiBaseUrl()).toBe("");
+  });
+
   it("preserves signup -> name -> onboarding -> workspace flow", async () => {
     const api = apiMock();
     render(<StageApp api={api} />);

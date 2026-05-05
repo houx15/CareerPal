@@ -182,8 +182,12 @@ function NameScreen({ onSubmit }: { onSubmit: (name: string) => Promise<void> })
   );
 }
 
+export function defaultApiBaseUrl(): string {
+  return process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+}
+
 function createBrowserApi(getToken: () => string | null): StageApi {
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+  const baseUrl = defaultApiBaseUrl();
   return new ApiClient(baseUrl, getToken);
 }
 
