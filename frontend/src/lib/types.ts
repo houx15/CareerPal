@@ -24,6 +24,9 @@ export interface AuthResponse {
 export interface Profile {
   updated_at: string;
   name: string | null;
+  phone: string | null;
+  contact_email: string | null;
+  location: string | null;
   headline: string | null;
   target_direction: string | null;
   comment: string | null;
@@ -34,7 +37,7 @@ export interface Profile {
   certificates: Record<string, unknown>[];
 }
 
-export type ProfilePatch = Partial<Pick<Profile, "name" | "headline" | "target_direction" | "comment">>;
+export type ProfilePatch = Partial<Pick<Profile, "name" | "phone" | "contact_email" | "location" | "headline" | "target_direction" | "comment">>;
 
 export type CompletenessState = "empty" | "partial" | "complete";
 

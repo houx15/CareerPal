@@ -7,6 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field
 class ProfileResponse(BaseModel):
     updated_at: datetime
     name: str | None = None
+    phone: str | None = None
+    contact_email: str | None = None
+    location: str | None = None
     headline: str | None = None
     target_direction: str | None = None
     comment: str | None = None
@@ -21,6 +24,9 @@ class ProfileUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = None
+    phone: str | None = None
+    contact_email: str | None = None
+    location: str | None = None
     headline: str | None = None
     target_direction: str | None = None
     comment: str | None = None

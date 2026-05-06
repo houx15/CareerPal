@@ -4,6 +4,9 @@ import { Workspace as PrototypeWorkspace } from "./workspace/Workspace";
 
 export interface WorkspaceProfile {
   name: string | null;
+  phone: string | null;
+  contact_email: string | null;
+  location: string | null;
   headline: string | null;
   target_direction: string | null;
   comment: string | null;
@@ -39,6 +42,9 @@ export function Workspace({ profile, onLogout, onPatchProfile }: WorkspaceProps)
       }}
       profile={{
         name: profile.name,
+        phone: profile.phone,
+        contact_email: profile.contact_email,
+        location: profile.location,
         headline: profile.headline,
         target_direction: profile.target_direction,
         comment: profile.comment,
@@ -48,6 +54,9 @@ export function Workspace({ profile, onLogout, onPatchProfile }: WorkspaceProps)
         const saved = await onPatchProfile(payload);
         return {
           name: saved.name ?? undefined,
+          phone: saved.phone ?? undefined,
+          contact_email: saved.contact_email ?? undefined,
+          location: saved.location ?? undefined,
           headline: saved.headline ?? undefined,
           target_direction: saved.target_direction ?? undefined,
           comment: saved.comment ?? undefined,

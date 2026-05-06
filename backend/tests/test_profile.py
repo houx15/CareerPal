@@ -15,6 +15,9 @@ def test_profile_starts_empty_with_structured_sections(client):
     assert response.status_code == 200
     body = response.json()
     assert body["name"] is None
+    assert body["phone"] is None
+    assert body["contact_email"] is None
+    assert body["location"] is None
     assert body["education"] == []
     assert body["experience"] == []
     assert body["projects"] == []
@@ -34,6 +37,26 @@ def test_profile_patch_persists_allowed_fields(client):
     assert response.status_code == 200
     assert response.json()["name"] == "Alex Chen"
     assert client.get("/api/profile", headers=headers).json()["target_direction"] == "Backend SWE"
+
+
+def test_profile_patch_persists_contact_fields(client):
+    headers = auth_headers(client)
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "phone": "+1 555 123 4567",
+            "contact_email": "alex.contact@example.com",
+            "location": "Seattle, WA",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["phone"] == "+1 555 123 4567"
+    profile = client.get("/api/profile", headers=headers).json()
+    assert profile["contact_email"] == "alex.contact@example.com"
+    assert profile["location"] == "Seattle, WA"
 
 
 def test_profile_patch_updates_updated_at(client):

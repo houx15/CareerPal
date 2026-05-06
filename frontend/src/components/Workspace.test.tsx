@@ -58,10 +58,23 @@ describe("Workspace", () => {
     await user.type(screen.getByLabelText("Name"), "Jordan Lee");
     await user.clear(screen.getByLabelText("Role"));
     await user.type(screen.getByLabelText("Role"), "Backend SWE intern");
+    await user.clear(screen.getByLabelText("Location"));
+    await user.type(screen.getByLabelText("Location"), "Seattle, WA");
+    await user.clear(screen.getByLabelText("Email"));
+    await user.type(screen.getByLabelText("Email"), "jordan.contact@example.com");
+    await user.clear(screen.getByLabelText("Phone"));
+    await user.type(screen.getByLabelText("Phone"), "+1 555 123 4567");
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 
-    expect(onPatchProfile).toHaveBeenCalledWith({ name: "Jordan Lee", headline: "Backend SWE intern" });
+    expect(onPatchProfile).toHaveBeenCalledWith({
+      name: "Jordan Lee",
+      headline: "Backend SWE intern",
+      location: "Seattle, WA",
+      contact_email: "jordan.contact@example.com",
+      phone: "+1 555 123 4567",
+    });
     expect(await screen.findByRole("heading", { name: "Jordan Lee" })).toBeInTheDocument();
+    expect(screen.getByText(/Backend SWE intern · Seattle, WA/)).toBeInTheDocument();
   });
 
   it("saves edited summary through the profile patch callback", async () => {

@@ -13,6 +13,9 @@ def _profile_response(profile: Profile) -> ProfileResponse:
     return ProfileResponse(
         updated_at=profile.updated_at,
         name=profile.name,
+        phone=profile.phone,
+        contact_email=profile.contact_email,
+        location=profile.location,
         headline=profile.headline,
         target_direction=profile.target_direction,
         comment=profile.comment,

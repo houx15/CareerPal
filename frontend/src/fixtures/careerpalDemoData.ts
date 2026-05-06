@@ -9,6 +9,7 @@ export interface DemoProfile {
   email: string;
   role: string;
   location: string;
+  phone: string;
   summary: string;
   basics: { state: SectionState };
   summarySec: { state: SectionState };
@@ -26,6 +27,7 @@ export const sampleProfiles: Record<Lang, DemoProfile> = {
     email: "alex@chen.co",
     role: "Senior Product Designer",
     location: "Brooklyn, NY",
+    phone: "",
     summary: "8 years designing tools for makers. Strongest where ambiguity meets design systems.",
     basics: { state: "complete" },
     summarySec: { state: "partial" },
@@ -59,6 +61,7 @@ export const sampleProfiles: Record<Lang, DemoProfile> = {
     email: "siyuan.li@example.com",
     role: "高级产品设计师",
     location: "上海 · 浦东",
+    phone: "",
     summary: "8 年产品设计经验，专注 B 端工具与 AI 产品。擅长把模糊问题拆成可落地的设计系统，并推动跨团队协作。",
     basics: { state: "complete" },
     summarySec: { state: "partial" },

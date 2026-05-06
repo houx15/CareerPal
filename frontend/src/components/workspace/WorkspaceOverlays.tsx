@@ -192,6 +192,7 @@ export function EditDrawer({
               <Field label="Role" value={draft.role} onChange={(value) => setDraft((current) => ({ ...current, role: value }))} />
               <Field label="Location" value={draft.location} onChange={(value) => setDraft((current) => ({ ...current, location: value }))} />
               <Field label="Email" value={draft.email} onChange={(value) => setDraft((current) => ({ ...current, email: value }))} />
+              <Field label="Phone" value={draft.phone} onChange={(value) => setDraft((current) => ({ ...current, phone: value }))} />
             </>
           ) : null}
           {section === "summarySec" ? (
@@ -203,6 +204,7 @@ export function EditDrawer({
               <Field label="Role" value={draft.role} onChange={(value) => setDraft((current) => ({ ...current, role: value }))} />
               <Field label="Location" value={draft.location} onChange={(value) => setDraft((current) => ({ ...current, location: value }))} />
               <Field label="Email" value={draft.email} onChange={(value) => setDraft((current) => ({ ...current, email: value }))} />
+              <Field label="Phone" value={draft.phone} onChange={(value) => setDraft((current) => ({ ...current, phone: value }))} />
             </>
           ) : null}
           {error ? <p className="form-error">{error}</p> : null}
@@ -251,7 +253,13 @@ function profilePatchForSection(section: ProfileSectionId, profile: DemoProfile)
   }
 
   if (section === "basics") {
-    return { name: profile.name, headline: profile.role };
+    return {
+      name: profile.name,
+      headline: profile.role,
+      location: profile.location,
+      contact_email: profile.email,
+      phone: profile.phone,
+    };
   }
 
   return {};
