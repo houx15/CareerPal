@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -58,3 +58,22 @@ class Profile(Base):
     )
 
     user: Mapped[User] = relationship(back_populates="profile")
+    education_items: Mapped[list["Education"]] = relationship(
+        back_populates="profile",
+        cascade="all, delete-orphan",
+        order_by="Education.sort_order",
+    )
+
+
+class Education(Base):
+    __tablename__ = "educations"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    profile_id: Mapped[str] = mapped_column(ForeignKey("profiles.id"), index=True, nullable=False)
+    school: Mapped[str] = mapped_column(String(255), nullable=False)
+    degree: Mapped[str] = mapped_column(String(255), nullable=False)
+    time: Mapped[str] = mapped_column(String(120), nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    profile: Mapped[Profile] = relationship(back_populates="education_items")

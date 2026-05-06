@@ -21,6 +21,13 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface EducationItem {
+  school: string;
+  degree: string;
+  time: string;
+  comment?: string | null;
+}
+
 export interface Profile {
   updated_at: string;
   name: string | null;
@@ -30,14 +37,14 @@ export interface Profile {
   headline: string | null;
   target_direction: string | null;
   comment: string | null;
-  education: Record<string, unknown>[];
+  education: EducationItem[];
   experience: Record<string, unknown>[];
   projects: Record<string, unknown>[];
   skills: Record<string, unknown>[];
   certificates: Record<string, unknown>[];
 }
 
-export type ProfilePatch = Partial<Pick<Profile, "name" | "phone" | "contact_email" | "location" | "headline" | "target_direction" | "comment">>;
+export type ProfilePatch = Partial<Pick<Profile, "name" | "phone" | "contact_email" | "location" | "headline" | "target_direction" | "comment" | "education">>;
 
 export type CompletenessState = "empty" | "partial" | "complete";
 

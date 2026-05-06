@@ -76,7 +76,93 @@ def test_profile_patch_rejects_unknown_fields(client):
     response = client.patch(
         "/api/profile",
         headers=headers,
-        json={"name": "Alex Chen", "user_id": "not-allowed", "created_at": "2026-05-03", "education": []},
+        json={"name": "Alex Chen", "user_id": "not-allowed", "created_at": "2026-05-03"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_profile_patch_replaces_education_in_display_order(client):
+    headers = auth_headers(client)
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "education": [
+                {
+                    "school": "University of Washington",
+                    "degree": "B.S. Computer Science",
+                    "time": "2023 - 2027",
+                    "comment": "Systems track",
+                },
+                {
+                    "school": "Bellevue College",
+                    "degree": "Running Start",
+                    "time": "2021 - 2023",
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["education"] == [
+        {
+            "school": "University of Washington",
+            "degree": "B.S. Computer Science",
+            "time": "2023 - 2027",
+            "comment": "Systems track",
+        },
+        {
+            "school": "Bellevue College",
+            "degree": "Running Start",
+            "time": "2021 - 2023",
+            "comment": None,
+        },
+    ]
+    assert client.get("/api/profile", headers=headers).json()["education"] == response.json()["education"]
+
+
+def test_profile_patch_replacing_education_with_shorter_list_removes_old_items(client):
+    headers = auth_headers(client)
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "education": [
+                {"school": "First University", "degree": "B.A.", "time": "2018 - 2022"},
+                {"school": "Second University", "degree": "M.S.", "time": "2022 - 2024"},
+            ]
+        },
+    )
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"education": [{"school": "Second University", "degree": "M.S.", "time": "2022 - 2024"}]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["education"] == [
+        {"school": "Second University", "degree": "M.S.", "time": "2022 - 2024", "comment": None}
+    ]
+
+
+def test_profile_patch_rejects_overlong_education_fields(client):
+    headers = auth_headers(client)
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "education": [
+                {
+                    "school": "S" * 256,
+                    "degree": "B.S. Computer Science",
+                    "time": "2023 - 2027",
+                }
+            ]
+        },
     )
 
     assert response.status_code == 422
@@ -100,3 +186,33 @@ def test_completeness_reflects_name_and_empty_sections(client):
             "education": "empty",
         },
     }
+
+
+def test_completeness_reports_education_complete_when_required_fields_exist(client):
+    headers = auth_headers(client)
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"education": [{"school": "University of Washington", "degree": "B.S. CS", "time": "2023 - 2027"}]},
+    )
+
+    response = client.get("/api/profile/completeness", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["sections"]["education"] == "complete"
+    assert response.json()["overall"] == "partial"
+
+
+def test_completeness_reports_education_partial_when_items_are_incomplete(client):
+    headers = auth_headers(client)
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"education": [{"school": "University of Washington", "degree": "", "time": "2023 - 2027"}]},
+    )
+
+    response = client.get("/api/profile/completeness", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["sections"]["education"] == "partial"
+    assert response.json()["overall"] == "partial"

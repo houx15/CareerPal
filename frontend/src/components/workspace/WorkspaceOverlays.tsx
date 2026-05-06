@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import type { CopyKey } from "../../i18n/copy";
 import { useLang } from "../../i18n/LangProvider";
 import type { DemoProfile } from "../../fixtures/careerpalDemoData";
-import type { ProfilePatch } from "../../lib/types";
+import type { EducationItem, ProfilePatch } from "../../lib/types";
 import { Slime } from "../Slime";
 import type { ProfileSectionId } from "./ProfileDashboard";
 
@@ -198,7 +198,27 @@ export function EditDrawer({
           {section === "summarySec" ? (
             <Field label="Summary" value={draft.summary} onChange={(value) => setDraft((current) => ({ ...current, summary: value }))} multiline rows={5} />
           ) : null}
-          {section !== "basics" && section !== "summarySec" ? (
+          {section === "education" ? (
+            <>
+              {draft.education.items.map((education, index) => (
+                <fieldset className="edit-card" key={index}>
+                  <legend className="sr-only">Education {index + 1}</legend>
+                  <Field label="School" value={education.school} onChange={(value) => updateEducationItem(index, "school", value)} />
+                  <div className="edit-card-row">
+                    <Field label="Degree" value={education.degree} onChange={(value) => updateEducationItem(index, "degree", value)} />
+                    <Field label="Time period" value={education.time} onChange={(value) => updateEducationItem(index, "time", value)} placeholder="e.g. 2022 - present" />
+                  </div>
+                  <button className="edit-remove" type="button" aria-label={`Remove education ${index + 1}`} onClick={() => removeEducationItem(index)}>
+                    Remove
+                  </button>
+                </fieldset>
+              ))}
+              <button className="edit-add" type="button" onClick={addEducationItem}>
+                + Add another
+              </button>
+            </>
+          ) : null}
+          {section !== "basics" && section !== "summarySec" && section !== "education" ? (
             <>
               <Field label="Name" value={draft.name} onChange={(value) => setDraft((current) => ({ ...current, name: value }))} />
               <Field label="Role" value={draft.role} onChange={(value) => setDraft((current) => ({ ...current, role: value }))} />
@@ -220,6 +240,36 @@ export function EditDrawer({
       </aside>
     </div>
   );
+
+  function updateEducationItem(index: number, key: keyof EducationItem, value: string) {
+    setDraft((current) => ({
+      ...current,
+      education: {
+        ...current.education,
+        items: current.education.items.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item)),
+      },
+    }));
+  }
+
+  function addEducationItem() {
+    setDraft((current) => ({
+      ...current,
+      education: {
+        ...current.education,
+        items: [...current.education.items, { school: "", degree: "", time: "" }],
+      },
+    }));
+  }
+
+  function removeEducationItem(index: number) {
+    setDraft((current) => ({
+      ...current,
+      education: {
+        ...current.education,
+        items: current.education.items.filter((_, itemIndex) => itemIndex !== index),
+      },
+    }));
+  }
 }
 
 function Field({
@@ -228,20 +278,22 @@ function Field({
   onChange,
   multiline = false,
   rows = 1,
+  placeholder,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   multiline?: boolean;
   rows?: number;
+  placeholder?: string;
 }) {
   return (
     <label className="input-group">
       <span className="input-label">{label}</span>
       {multiline ? (
-        <textarea className="input" value={value} rows={rows} onChange={(event) => onChange(event.target.value)} />
+        <textarea className="input" value={value} rows={rows} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
       ) : (
-        <input className="input" value={value} onChange={(event) => onChange(event.target.value)} />
+        <input className="input" value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
       )}
     </label>
   );
@@ -260,6 +312,10 @@ function profilePatchForSection(section: ProfileSectionId, profile: DemoProfile)
       contact_email: profile.email,
       phone: profile.phone,
     };
+  }
+
+  if (section === "education") {
+    return { education: profile.education.items };
   }
 
   return {};

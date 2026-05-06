@@ -90,4 +90,68 @@ describe("Workspace", () => {
     expect(onPatchProfile).toHaveBeenCalledWith({ comment: "I build reliable backend systems for campus products." });
     expect(await screen.findByText("I build reliable backend systems for campus products.")).toBeInTheDocument();
   });
+
+  it("saves edited education through the profile patch callback and updates the card", async () => {
+    const user = userEvent.setup();
+    const { onPatchProfile } = renderWorkspace();
+    onPatchProfile.mockResolvedValue({
+      education: [{ school: "University of Washington", degree: "MS, Computer Science", time: "2024 - 2026" }],
+    });
+
+    await user.click(screen.getAllByRole("button", { name: /edit/i })[5]);
+    await user.clear(screen.getByLabelText("School"));
+    await user.type(screen.getByLabelText("School"), "University of Washington");
+    await user.clear(screen.getByLabelText("Degree"));
+    await user.type(screen.getByLabelText("Degree"), "MS, Computer Science");
+    await user.clear(screen.getByLabelText("Time period"));
+    await user.type(screen.getByLabelText("Time period"), "2024 - 2026");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(onPatchProfile).toHaveBeenCalledWith({
+      education: [{ school: "University of Washington", degree: "MS, Computer Science", time: "2024 - 2026" }],
+    });
+    expect(await screen.findByText("University of Washington")).toBeInTheDocument();
+    expect(screen.getByText("MS, Computer Science")).toBeInTheDocument();
+    expect(screen.getByText("2024 - 2026")).toBeInTheDocument();
+  });
+
+  it("saves added education rows in order", async () => {
+    const user = userEvent.setup();
+    const { onPatchProfile } = renderWorkspace();
+    onPatchProfile.mockResolvedValue({
+      education: [
+        { school: "Carnegie Mellon", degree: "BFA, Design", time: "2013 - 2017" },
+        { school: "University of Washington", degree: "MS, Computer Science", time: "2024 - 2026" },
+      ],
+    });
+
+    await user.click(screen.getAllByRole("button", { name: /edit/i })[5]);
+    await user.click(screen.getByRole("button", { name: /\+ add another/i }));
+    const schools = screen.getAllByLabelText("School");
+    const degrees = screen.getAllByLabelText("Degree");
+    const periods = screen.getAllByLabelText("Time period");
+    await user.type(schools[1], "University of Washington");
+    await user.type(degrees[1], "MS, Computer Science");
+    await user.type(periods[1], "2024 - 2026");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(onPatchProfile).toHaveBeenCalledWith({
+      education: [
+        { school: "Carnegie Mellon", degree: "BFA, Design", time: "2013 - 2017" },
+        { school: "University of Washington", degree: "MS, Computer Science", time: "2024 - 2026" },
+      ],
+    });
+  });
+
+  it("removes education rows before saving", async () => {
+    const user = userEvent.setup();
+    const { onPatchProfile } = renderWorkspace();
+    onPatchProfile.mockResolvedValue({ education: [] });
+
+    await user.click(screen.getAllByRole("button", { name: /edit/i })[5]);
+    await user.click(screen.getByRole("button", { name: /remove education 1/i }));
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(onPatchProfile).toHaveBeenCalledWith({ education: [] });
+  });
 });

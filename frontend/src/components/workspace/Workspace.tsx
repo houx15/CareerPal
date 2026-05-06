@@ -46,20 +46,32 @@ export function Workspace({ user, onLogout, profile: persistedProfile, onPatchPr
   const [menuOpen, setMenuOpen] = useState(false);
   const [savedProfile, setSavedProfile] = useState<ProfilePatch>({});
   const profile = useMemo<DemoProfile>(
-    () => ({
-      ...sampleProfiles[lang],
-      name: savedProfile.name ?? persistedProfile?.name ?? user.name,
-      initials: user.initials,
-      email: savedProfile.contact_email ?? persistedProfile?.contact_email ?? user.email,
-      handle: user.handle,
-      role: savedProfile.headline ?? persistedProfile?.headline ?? sampleProfiles[lang].role,
-      location: savedProfile.location ?? persistedProfile?.location ?? sampleProfiles[lang].location,
-      phone: savedProfile.phone ?? persistedProfile?.phone ?? sampleProfiles[lang].phone,
-      summary: savedProfile.comment ?? persistedProfile?.comment ?? sampleProfiles[lang].summary,
-    }),
+    () => {
+      const education = savedProfile.education ?? persistedProfile?.education;
+
+      return {
+        ...sampleProfiles[lang],
+        name: savedProfile.name ?? persistedProfile?.name ?? user.name,
+        initials: user.initials,
+        email: savedProfile.contact_email ?? persistedProfile?.contact_email ?? user.email,
+        handle: user.handle,
+        role: savedProfile.headline ?? persistedProfile?.headline ?? sampleProfiles[lang].role,
+        location: savedProfile.location ?? persistedProfile?.location ?? sampleProfiles[lang].location,
+        phone: savedProfile.phone ?? persistedProfile?.phone ?? sampleProfiles[lang].phone,
+        summary: savedProfile.comment ?? persistedProfile?.comment ?? sampleProfiles[lang].summary,
+        education:
+          education === undefined
+            ? sampleProfiles[lang].education
+            : {
+                state: education.length > 0 ? "complete" : "empty",
+                items: education,
+              },
+      };
+    },
     [
       lang,
       persistedProfile?.comment,
+      persistedProfile?.education,
       persistedProfile?.headline,
       persistedProfile?.contact_email,
       persistedProfile?.location,
@@ -67,6 +79,7 @@ export function Workspace({ user, onLogout, profile: persistedProfile, onPatchPr
       persistedProfile?.phone,
       savedProfile.comment,
       savedProfile.contact_email,
+      savedProfile.education,
       savedProfile.headline,
       savedProfile.location,
       savedProfile.name,

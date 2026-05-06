@@ -103,6 +103,17 @@ export function ProfileDashboard({ profile, onImprove, onSection }: ProfileDashb
                   </div>
                 </div>
               ) : null}
+              {section.id === "education" ? (
+                <div className="profile-card-body">
+                  {profile.education.items.slice(0, 2).map((item, index) => (
+                    <div className="profile-card-row" key={`${item.school}-${item.degree}-${item.time}-${index}`}>
+                      <div className="profile-card-row-title">{item.school}</div>
+                      <div className="profile-card-row-meta">{item.degree}</div>
+                      <div className="profile-card-row-note">{item.time}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </article>
           );
         })}
