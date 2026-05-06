@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { sampleProfiles, type DemoProfile } from "../../fixtures/careerpalDemoData";
 import type { CopyKey } from "../../i18n/copy";
 import { LangToggle, useLang } from "../../i18n/LangProvider";
+import type { ProfilePatch } from "../../lib/types";
 import { Slime } from "../Slime";
 import { ProfileDashboard, type ProfileSectionId } from "./ProfileDashboard";
 import { EditDrawer, ImproveChatOverlay } from "./WorkspaceOverlays";
@@ -23,6 +24,8 @@ export interface WorkspaceUser {
 interface WorkspaceProps {
   user: WorkspaceUser;
   onLogout: () => void;
+  profile?: ProfilePatch;
+  onPatchProfile?: (payload: ProfilePatch) => Promise<ProfilePatch>;
 }
 
 type Tab = "profile" | "match" | "resume" | "grow" | "activity" | "settings";
@@ -35,26 +38,46 @@ const NAV: Array<{ id: Tab; label: CopyKey }> = [
   { id: "activity", label: "nav_activity" },
 ];
 
-export function Workspace({ user, onLogout }: WorkspaceProps) {
+export function Workspace({ user, onLogout, profile: persistedProfile, onPatchProfile }: WorkspaceProps) {
   const { t, lang } = useLang();
   const [tab, setTab] = useState<Tab>("profile");
   const [improveSection, setImproveSection] = useState<"any" | "basics" | "summary" | "experience" | "skills" | "projects" | "education" | null>(null);
   const [editSection, setEditSection] = useState<ProfileSectionId | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [savedProfile, setSavedProfile] = useState<ProfilePatch>({});
   const profile = useMemo<DemoProfile>(
     () => ({
       ...sampleProfiles[lang],
-      name: user.name,
+      name: savedProfile.name ?? persistedProfile?.name ?? user.name,
       initials: user.initials,
       email: user.email,
       handle: user.handle,
+      role: savedProfile.headline ?? persistedProfile?.headline ?? sampleProfiles[lang].role,
+      summary: savedProfile.comment ?? persistedProfile?.comment ?? sampleProfiles[lang].summary,
     }),
-    [lang, user.email, user.handle, user.initials, user.name],
+    [
+      lang,
+      persistedProfile?.comment,
+      persistedProfile?.headline,
+      persistedProfile?.name,
+      savedProfile.comment,
+      savedProfile.headline,
+      savedProfile.name,
+      user.email,
+      user.handle,
+      user.initials,
+      user.name,
+    ],
   );
 
   function openChatFromEdit(section: ProfileSectionId) {
     setEditSection(null);
     setImproveSection(section === "summarySec" ? "summary" : section);
+  }
+
+  async function patchProfile(payload: ProfilePatch): Promise<void> {
+    const nextProfile = onPatchProfile ? await onPatchProfile(payload) : payload;
+    setSavedProfile((current) => ({ ...current, ...payload, ...nextProfile }));
   }
 
   return (
@@ -103,7 +126,7 @@ export function Workspace({ user, onLogout }: WorkspaceProps) {
 
       {improveSection ? <ImproveChatOverlay user={user} initialSection={improveSection} onClose={() => setImproveSection(null)} /> : null}
       {editSection ? (
-        <EditDrawer section={editSection} profile={profile} onClose={() => setEditSection(null)} onChatInstead={openChatFromEdit} />
+        <EditDrawer section={editSection} profile={profile} onClose={() => setEditSection(null)} onChatInstead={openChatFromEdit} onSave={patchProfile} />
       ) : null}
     </main>
   );

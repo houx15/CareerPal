@@ -121,6 +121,12 @@ function StageAppInner({ api }: StageAppProps) {
     setStage("intro");
   }
 
+  async function handlePatchProfile(payload: ProfilePatch): Promise<Partial<WorkspaceProfile>> {
+    const saved = await client.patchProfile(payload);
+    setProfile((current) => (current ? { ...current, ...saved } : current));
+    return saved;
+  }
+
   if (stage === "intro") {
     return <IntroPage onGetStarted={() => setStage("signup")} onSignIn={() => setStage("login")} />;
   }
@@ -168,7 +174,7 @@ function StageAppInner({ api }: StageAppProps) {
     return null;
   }
 
-  return <Workspace profile={profile} completeness={completeness} onLogout={handleLogout} />;
+  return <Workspace profile={profile} completeness={completeness} onLogout={handleLogout} onPatchProfile={handlePatchProfile} />;
 }
 
 export function defaultApiBaseUrl(): string {

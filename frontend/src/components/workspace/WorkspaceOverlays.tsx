@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import type { CopyKey } from "../../i18n/copy";
 import { useLang } from "../../i18n/LangProvider";
 import type { DemoProfile } from "../../fixtures/careerpalDemoData";
+import type { ProfilePatch } from "../../lib/types";
 import { Slime } from "../Slime";
 import type { ProfileSectionId } from "./ProfileDashboard";
 
@@ -140,14 +141,34 @@ export function EditDrawer({
   profile,
   onClose,
   onChatInstead,
+  onSave,
 }: {
   section: ProfileSectionId;
   profile: DemoProfile;
   onClose: () => void;
   onChatInstead: (section: ProfileSectionId) => void;
+  onSave: (payload: ProfilePatch) => Promise<void>;
 }) {
   const { t } = useLang();
   const sectionName = t(sectionLabel(section));
+  const [draft, setDraft] = useState(() => ({ ...profile }));
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save() {
+    const payload = profilePatchForSection(section, draft);
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      await onSave(payload);
+      onClose();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Could not save profile changes.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   return (
     <div className="overlay-back" onClick={onClose}>
@@ -165,17 +186,33 @@ export function EditDrawer({
           </button>
         </div>
         <div className="edit-drawer-body">
-          <Field label="Name" value={profile.name} />
-          <Field label="Role" value={profile.role} />
-          <Field label="Location" value={profile.location} />
-          <Field label="Email" value={profile.email} />
+          {section === "basics" ? (
+            <>
+              <Field label="Name" value={draft.name} onChange={(value) => setDraft((current) => ({ ...current, name: value }))} />
+              <Field label="Role" value={draft.role} onChange={(value) => setDraft((current) => ({ ...current, role: value }))} />
+              <Field label="Location" value={draft.location} onChange={(value) => setDraft((current) => ({ ...current, location: value }))} />
+              <Field label="Email" value={draft.email} onChange={(value) => setDraft((current) => ({ ...current, email: value }))} />
+            </>
+          ) : null}
+          {section === "summarySec" ? (
+            <Field label="Summary" value={draft.summary} onChange={(value) => setDraft((current) => ({ ...current, summary: value }))} multiline rows={5} />
+          ) : null}
+          {section !== "basics" && section !== "summarySec" ? (
+            <>
+              <Field label="Name" value={draft.name} onChange={(value) => setDraft((current) => ({ ...current, name: value }))} />
+              <Field label="Role" value={draft.role} onChange={(value) => setDraft((current) => ({ ...current, role: value }))} />
+              <Field label="Location" value={draft.location} onChange={(value) => setDraft((current) => ({ ...current, location: value }))} />
+              <Field label="Email" value={draft.email} onChange={(value) => setDraft((current) => ({ ...current, email: value }))} />
+            </>
+          ) : null}
+          {error ? <p className="form-error">{error}</p> : null}
         </div>
         <div className="edit-drawer-foot">
           <button className="btn btn-ghost" type="button" onClick={onClose}>
             {t("edit_cancel")}
           </button>
-          <button className="btn btn-accent" type="button" onClick={onClose}>
-            {t("edit_save")}
+          <button className="btn btn-accent" type="button" disabled={isSaving} onClick={save}>
+            {isSaving ? "Saving..." : t("edit_save")}
           </button>
         </div>
       </aside>
@@ -183,13 +220,41 @@ export function EditDrawer({
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({
+  label,
+  value,
+  onChange,
+  multiline = false,
+  rows = 1,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  multiline?: boolean;
+  rows?: number;
+}) {
   return (
     <label className="input-group">
       <span className="input-label">{label}</span>
-      <input className="input" defaultValue={value} />
+      {multiline ? (
+        <textarea className="input" value={value} rows={rows} onChange={(event) => onChange(event.target.value)} />
+      ) : (
+        <input className="input" value={value} onChange={(event) => onChange(event.target.value)} />
+      )}
     </label>
   );
+}
+
+function profilePatchForSection(section: ProfileSectionId, profile: DemoProfile): ProfilePatch {
+  if (section === "summarySec") {
+    return { comment: profile.summary };
+  }
+
+  if (section === "basics") {
+    return { name: profile.name, headline: profile.role };
+  }
+
+  return {};
 }
 
 function introFor(t: (key: CopyKey) => string, section: ImproveSection) {

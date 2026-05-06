@@ -1,10 +1,12 @@
 import type { CompletenessState } from "../lib/types";
+import type { ProfilePatch } from "../lib/types";
 import { Workspace as PrototypeWorkspace } from "./workspace/Workspace";
 
 export interface WorkspaceProfile {
   name: string | null;
   headline: string | null;
   target_direction: string | null;
+  comment: string | null;
   education: Record<string, unknown>[];
   experience: Record<string, unknown>[];
   projects: Record<string, unknown>[];
@@ -21,9 +23,10 @@ interface WorkspaceProps {
   profile: WorkspaceProfile;
   completeness: WorkspaceCompleteness;
   onLogout: () => void;
+  onPatchProfile: (payload: ProfilePatch) => Promise<Partial<WorkspaceProfile>>;
 }
 
-export function Workspace({ profile, onLogout }: WorkspaceProps) {
+export function Workspace({ profile, onLogout, onPatchProfile }: WorkspaceProps) {
   const name = profile.name || "CareerPal user";
 
   return (
@@ -34,7 +37,22 @@ export function Workspace({ profile, onLogout }: WorkspaceProps) {
         email: "",
         handle: usernameFromName(name),
       }}
+      profile={{
+        name: profile.name,
+        headline: profile.headline,
+        target_direction: profile.target_direction,
+        comment: profile.comment,
+      }}
       onLogout={onLogout}
+      onPatchProfile={async (payload) => {
+        const saved = await onPatchProfile(payload);
+        return {
+          name: saved.name ?? undefined,
+          headline: saved.headline ?? undefined,
+          target_direction: saved.target_direction ?? undefined,
+          comment: saved.comment ?? undefined,
+        };
+      }}
     />
   );
 }
