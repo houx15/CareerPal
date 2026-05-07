@@ -168,6 +168,147 @@ def test_profile_patch_rejects_overlong_education_fields(client):
     assert response.status_code == 422
 
 
+def test_profile_patch_replaces_experience_in_display_order(client):
+    headers = auth_headers(client)
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "experience": [
+                {
+                    "company": "Stripe",
+                    "role": "Backend Engineering Intern",
+                    "time": "Summer 2025",
+                    "description": "Built reconciliation jobs for payment reporting.",
+                    "achievements": ["Reduced manual review time by 30%"],
+                    "comment": "Strong backend systems example",
+                },
+                {
+                    "company": "Campus IT",
+                    "role": "Student Developer",
+                    "time": "2024 - 2025",
+                    "description": "Maintained internal ticketing integrations.",
+                    "achievements": [],
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["experience"] == [
+        {
+            "company": "Stripe",
+            "role": "Backend Engineering Intern",
+            "time": "Summer 2025",
+            "description": "Built reconciliation jobs for payment reporting.",
+            "achievements": ["Reduced manual review time by 30%"],
+            "comment": "Strong backend systems example",
+        },
+        {
+            "company": "Campus IT",
+            "role": "Student Developer",
+            "time": "2024 - 2025",
+            "description": "Maintained internal ticketing integrations.",
+            "achievements": [],
+            "comment": None,
+        },
+    ]
+    assert client.get("/api/profile", headers=headers).json()["experience"] == response.json()["experience"]
+
+
+def test_profile_patch_replacing_experience_with_shorter_list_removes_old_items(client):
+    headers = auth_headers(client)
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "experience": [
+                {"company": "First Co", "role": "Intern", "time": "2024", "description": "One", "achievements": []},
+                {
+                    "company": "Second Co",
+                    "role": "Developer",
+                    "time": "2025",
+                    "description": "Two",
+                    "achievements": [],
+                },
+            ]
+        },
+    )
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "experience": [
+                {
+                    "company": "Second Co",
+                    "role": "Developer",
+                    "time": "2025",
+                    "description": "Two",
+                    "achievements": [],
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["experience"] == [
+        {
+            "company": "Second Co",
+            "role": "Developer",
+            "time": "2025",
+            "description": "Two",
+            "achievements": [],
+            "comment": None,
+        }
+    ]
+
+
+def test_profile_patch_defaults_optional_experience_fields(client):
+    headers = auth_headers(client)
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"experience": [{"company": "Campus IT", "role": "Student Developer", "time": "2024 - 2025"}]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["experience"] == [
+        {
+            "company": "Campus IT",
+            "role": "Student Developer",
+            "time": "2024 - 2025",
+            "description": "",
+            "achievements": [],
+            "comment": None,
+        }
+    ]
+
+
+def test_profile_patch_rejects_overlong_experience_fields(client):
+    headers = auth_headers(client)
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "experience": [
+                {
+                    "company": "C" * 256,
+                    "role": "Backend Engineering Intern",
+                    "time": "Summer 2025",
+                    "description": "Built reconciliation jobs.",
+                    "achievements": [],
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_completeness_reflects_name_and_empty_sections(client):
     headers = auth_headers(client)
     client.patch("/api/profile", headers=headers, json={"name": "Alex Chen"})
@@ -216,3 +357,46 @@ def test_completeness_reports_education_partial_when_items_are_incomplete(client
     assert response.status_code == 200
     assert response.json()["sections"]["education"] == "partial"
     assert response.json()["overall"] == "partial"
+
+
+def test_completeness_reports_experience_complete_when_required_fields_exist(client):
+    headers = auth_headers(client)
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "experience": [
+                {
+                    "company": "Stripe",
+                    "role": "Backend Engineering Intern",
+                    "time": "Summer 2025",
+                    "description": "Built reconciliation jobs.",
+                    "achievements": ["Reduced manual review time by 30%"],
+                }
+            ]
+        },
+    )
+
+    response = client.get("/api/profile/completeness", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["sections"]["experience"] == "complete"
+    assert response.json()["overall"] == "partial"
+
+
+def test_completeness_reports_experience_partial_when_items_are_incomplete(client):
+    headers = auth_headers(client)
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "experience": [
+                {"company": "Campus IT", "role": "", "time": "2024", "description": "", "achievements": []}
+            ]
+        },
+    )
+
+    response = client.get("/api/profile/completeness", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["sections"]["experience"] == "partial"

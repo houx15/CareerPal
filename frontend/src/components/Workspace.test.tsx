@@ -91,6 +91,94 @@ describe("Workspace", () => {
     expect(await screen.findByText("I build reliable backend systems for campus products.")).toBeInTheDocument();
   });
 
+  it("saves edited experience through the profile patch callback and updates the card", async () => {
+    const user = userEvent.setup();
+    const { onPatchProfile } = renderWorkspace();
+    onPatchProfile.mockResolvedValue({
+      experience: [
+        {
+          company: "Stripe",
+          role: "Backend Engineering Intern",
+          time: "Summer 2025",
+          description: "Built reconciliation jobs for payment reporting.",
+          achievements: ["Reduced manual review time by 30%"],
+        },
+      ],
+    });
+
+    await user.click(screen.getAllByRole("button", { name: /edit/i })[2]);
+    await user.clear(screen.getByLabelText("Company"));
+    await user.type(screen.getByLabelText("Company"), "Stripe");
+    await user.clear(screen.getByLabelText("Role"));
+    await user.type(screen.getByLabelText("Role"), "Backend Engineering Intern");
+    await user.clear(screen.getByLabelText("Time period"));
+    await user.type(screen.getByLabelText("Time period"), "Summer 2025");
+    await user.clear(screen.getByLabelText("Description"));
+    await user.type(screen.getByLabelText("Description"), "Built reconciliation jobs for payment reporting.");
+    await user.clear(screen.getByLabelText("Achievements"));
+    await user.type(screen.getByLabelText("Achievements"), "Reduced manual review time by 30%");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(onPatchProfile).toHaveBeenCalledWith({
+      experience: [
+        {
+          company: "Stripe",
+          role: "Backend Engineering Intern",
+          time: "Summer 2025",
+          description: "Built reconciliation jobs for payment reporting.",
+          achievements: ["Reduced manual review time by 30%"],
+        },
+      ],
+    });
+    expect(await screen.findByText("Backend Engineering Intern · Stripe")).toBeInTheDocument();
+    expect(screen.getByText("Summer 2025")).toBeInTheDocument();
+    expect(screen.getByText("Built reconciliation jobs for payment reporting.")).toBeInTheDocument();
+  });
+
+  it("saves added experience rows in order", async () => {
+    const user = userEvent.setup();
+    const { onPatchProfile } = renderWorkspace();
+    onPatchProfile.mockResolvedValue({
+      experience: [
+        { company: "Linear", role: "Lead Designer", time: "2023 - present", description: "Shipped issue triage v2.", achievements: [] },
+        { company: "Stripe", role: "Backend Intern", time: "Summer 2025", description: "Built reporting jobs.", achievements: ["Cut review time 30%"] },
+      ],
+    });
+
+    await user.click(screen.getAllByRole("button", { name: /edit/i })[2]);
+    await user.click(screen.getByRole("button", { name: /\+ add another/i }));
+    const companies = screen.getAllByLabelText("Company");
+    const roles = screen.getAllByLabelText("Role");
+    const periods = screen.getAllByLabelText("Time period");
+    const descriptions = screen.getAllByLabelText("Description");
+    const achievements = screen.getAllByLabelText("Achievements");
+    await user.type(companies[1], "Stripe");
+    await user.type(roles[1], "Backend Intern");
+    await user.type(periods[1], "Summer 2025");
+    await user.type(descriptions[1], "Built reporting jobs.");
+    await user.type(achievements[1], "Cut review time 30%");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(onPatchProfile).toHaveBeenCalledWith({
+      experience: [
+        { company: "Linear", role: "Lead Designer", time: "2023 - present", description: "Shipped issue triage v2.", achievements: [] },
+        { company: "Stripe", role: "Backend Intern", time: "Summer 2025", description: "Built reporting jobs.", achievements: ["Cut review time 30%"] },
+      ],
+    });
+  });
+
+  it("removes experience rows before saving", async () => {
+    const user = userEvent.setup();
+    const { onPatchProfile } = renderWorkspace();
+    onPatchProfile.mockResolvedValue({ experience: [] });
+
+    await user.click(screen.getAllByRole("button", { name: /edit/i })[2]);
+    await user.click(screen.getByRole("button", { name: /remove experience 1/i }));
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(onPatchProfile).toHaveBeenCalledWith({ experience: [] });
+  });
+
   it("saves edited education through the profile patch callback and updates the card", async () => {
     const user = userEvent.setup();
     const { onPatchProfile } = renderWorkspace();

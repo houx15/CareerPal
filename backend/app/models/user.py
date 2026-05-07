@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -63,6 +63,11 @@ class Profile(Base):
         cascade="all, delete-orphan",
         order_by="Education.sort_order",
     )
+    experience_items: Mapped[list["Experience"]] = relationship(
+        back_populates="profile",
+        cascade="all, delete-orphan",
+        order_by="Experience.sort_order",
+    )
 
 
 class Education(Base):
@@ -77,3 +82,19 @@ class Education(Base):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
 
     profile: Mapped[Profile] = relationship(back_populates="education_items")
+
+
+class Experience(Base):
+    __tablename__ = "experiences"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    profile_id: Mapped[str] = mapped_column(ForeignKey("profiles.id"), index=True, nullable=False)
+    company: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(255), nullable=False)
+    time: Mapped[str] = mapped_column(String(120), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    achievements: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    profile: Mapped[Profile] = relationship(back_populates="experience_items")

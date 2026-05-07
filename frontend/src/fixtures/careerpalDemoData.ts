@@ -1,6 +1,8 @@
 import type { Lang } from "../i18n/copy";
+import type { ExperienceItem } from "../lib/types";
 
 export type SectionState = "empty" | "partial" | "complete";
+type DemoExperienceItem = ExperienceItem & { co?: string; note?: string };
 
 export interface DemoProfile {
   name: string;
@@ -13,7 +15,7 @@ export interface DemoProfile {
   summary: string;
   basics: { state: SectionState };
   summarySec: { state: SectionState };
-  experience: { state: SectionState; items: Array<{ co: string; role: string; time: string; note: string }> };
+  experience: { state: SectionState; items: DemoExperienceItem[] };
   skills: { state: SectionState; items: Array<{ name: string; years: number; level: number }> };
   projects: { state: SectionState; items: Array<{ title?: string; note?: string }> };
   education: { state: SectionState; items: Array<{ school: string; degree: string; time: string }> };
@@ -34,8 +36,15 @@ export const sampleProfiles: Record<Lang, DemoProfile> = {
     experience: {
       state: "complete",
       items: [
-        { co: "Linear", role: "Lead Designer", time: "2023 - present", note: "Shipped issue triage v2; team CSAT +18%" },
-        { co: "Notion", role: "Product Designer", time: "2020 - 2023", note: "AI block primitives, pre-launch" },
+        {
+          company: "Linear",
+          co: "Linear",
+          role: "Lead Designer",
+          time: "2023 - present",
+          description: "Shipped issue triage v2.",
+          note: "Shipped issue triage v2.",
+          achievements: [],
+        },
       ],
     },
     skills: {
@@ -68,8 +77,15 @@ export const sampleProfiles: Record<Lang, DemoProfile> = {
     experience: {
       state: "complete",
       items: [
-        { co: "字节跳动", role: "高级产品设计师", time: "2022 至今", note: "主导飞书多维表格 AI 重设计，DAU +37%" },
-        { co: "美团", role: "产品设计师", time: "2019 - 2022", note: "主导外卖商家端改版，操作时长 -22%" },
+        {
+          company: "字节跳动",
+          co: "字节跳动",
+          role: "高级产品设计师",
+          time: "2022 至今",
+          description: "主导飞书多维表格 AI 重设计，DAU +37%",
+          note: "主导飞书多维表格 AI 重设计，DAU +37%",
+          achievements: [],
+        },
       ],
     },
     skills: {

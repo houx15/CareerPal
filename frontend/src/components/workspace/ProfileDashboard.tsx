@@ -82,12 +82,12 @@ export function ProfileDashboard({ profile, onImprove, onSection }: ProfileDashb
               {section.id === "experience" ? (
                 <div className="profile-card-body">
                   {profile.experience.items.slice(0, 2).map((item) => (
-                    <div className="profile-card-row" key={`${item.co}-${item.role}`}>
+                    <div className="profile-card-row" key={`${item.company}-${item.role}-${item.time}`}>
                       <div className="profile-card-row-title">
-                        {item.role} · {item.co}
+                        {item.role} · {item.company}
                       </div>
                       <div className="profile-card-row-meta">{item.time}</div>
-                      <div className="profile-card-row-note">{item.note}</div>
+                      <div className="profile-card-row-note">{item.description}</div>
                     </div>
                   ))}
                 </div>

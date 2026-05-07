@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import type { CopyKey } from "../../i18n/copy";
 import { useLang } from "../../i18n/LangProvider";
 import type { DemoProfile } from "../../fixtures/careerpalDemoData";
-import type { EducationItem, ProfilePatch } from "../../lib/types";
+import type { EducationItem, ExperienceItem, ProfilePatch } from "../../lib/types";
 import { Slime } from "../Slime";
 import type { ProfileSectionId } from "./ProfileDashboard";
 
@@ -198,6 +198,40 @@ export function EditDrawer({
           {section === "summarySec" ? (
             <Field label="Summary" value={draft.summary} onChange={(value) => setDraft((current) => ({ ...current, summary: value }))} multiline rows={5} />
           ) : null}
+          {section === "experience" ? (
+            <>
+              {draft.experience.items.map((experience, index) => (
+                <fieldset className="edit-card" key={index}>
+                  <legend className="sr-only">Experience {index + 1}</legend>
+                  <Field label="Company" value={experience.company} onChange={(value) => updateExperienceItem(index, "company", value)} />
+                  <div className="edit-card-row">
+                    <Field label="Role" value={experience.role} onChange={(value) => updateExperienceItem(index, "role", value)} />
+                    <Field label="Time period" value={experience.time} onChange={(value) => updateExperienceItem(index, "time", value)} placeholder="e.g. 2022 - present" />
+                  </div>
+                  <Field
+                    label="Description"
+                    value={experience.description}
+                    onChange={(value) => updateExperienceItem(index, "description", value)}
+                    multiline
+                    rows={3}
+                  />
+                  <Field
+                    label="Achievements"
+                    value={experience.achievements.join("\n")}
+                    onChange={(value) => updateExperienceItem(index, "achievements", splitDraftLines(value))}
+                    multiline
+                    rows={3}
+                  />
+                  <button className="edit-remove" type="button" aria-label={`Remove experience ${index + 1}`} onClick={() => removeExperienceItem(index)}>
+                    Remove
+                  </button>
+                </fieldset>
+              ))}
+              <button className="edit-add" type="button" onClick={addExperienceItem}>
+                + Add another
+              </button>
+            </>
+          ) : null}
           {section === "education" ? (
             <>
               {draft.education.items.map((education, index) => (
@@ -218,7 +252,7 @@ export function EditDrawer({
               </button>
             </>
           ) : null}
-          {section !== "basics" && section !== "summarySec" && section !== "education" ? (
+          {section !== "basics" && section !== "summarySec" && section !== "experience" && section !== "education" ? (
             <>
               <Field label="Name" value={draft.name} onChange={(value) => setDraft((current) => ({ ...current, name: value }))} />
               <Field label="Role" value={draft.role} onChange={(value) => setDraft((current) => ({ ...current, role: value }))} />
@@ -247,6 +281,36 @@ export function EditDrawer({
       education: {
         ...current.education,
         items: current.education.items.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item)),
+      },
+    }));
+  }
+
+  function updateExperienceItem<K extends keyof ExperienceItem>(index: number, key: K, value: ExperienceItem[K]) {
+    setDraft((current) => ({
+      ...current,
+      experience: {
+        ...current.experience,
+        items: current.experience.items.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item)),
+      },
+    }));
+  }
+
+  function addExperienceItem() {
+    setDraft((current) => ({
+      ...current,
+      experience: {
+        ...current.experience,
+        items: [...current.experience.items, { company: "", role: "", time: "", description: "", achievements: [] }],
+      },
+    }));
+  }
+
+  function removeExperienceItem(index: number) {
+    setDraft((current) => ({
+      ...current,
+      experience: {
+        ...current.experience,
+        items: current.experience.items.filter((_, itemIndex) => itemIndex !== index),
       },
     }));
   }
@@ -318,7 +382,26 @@ function profilePatchForSection(section: ProfileSectionId, profile: DemoProfile)
     return { education: profile.education.items };
   }
 
+  if (section === "experience") {
+    return {
+      experience: profile.experience.items.map((item) => ({
+        company: item.company,
+        role: item.role,
+        time: item.time,
+        description: item.description,
+        achievements: item.achievements.map((achievement) => achievement.trim()).filter(Boolean),
+        ...(item.comment === undefined ? {} : { comment: item.comment }),
+      })),
+    };
+  }
+
   return {};
+}
+
+function splitDraftLines(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .filter((line) => line.trim());
 }
 
 function introFor(t: (key: CopyKey) => string, section: ImproveSection) {

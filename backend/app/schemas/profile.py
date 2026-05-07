@@ -15,6 +15,19 @@ class EducationItemUpdate(EducationItem):
     model_config = ConfigDict(extra="forbid")
 
 
+class ExperienceItem(BaseModel):
+    company: str = Field(max_length=255)
+    role: str = Field(max_length=255)
+    time: str = Field(max_length=120)
+    description: str = ""
+    achievements: list[str] = Field(default_factory=list)
+    comment: str | None = None
+
+
+class ExperienceItemUpdate(ExperienceItem):
+    model_config = ConfigDict(extra="forbid")
+
+
 class ProfileResponse(BaseModel):
     updated_at: datetime
     name: str | None = None
@@ -25,7 +38,7 @@ class ProfileResponse(BaseModel):
     target_direction: str | None = None
     comment: str | None = None
     education: list[EducationItem] = Field(default_factory=list)
-    experience: list[dict] = Field(default_factory=list)
+    experience: list[ExperienceItem] = Field(default_factory=list)
     projects: list[dict] = Field(default_factory=list)
     skills: list[dict] = Field(default_factory=list)
     certificates: list[dict] = Field(default_factory=list)
@@ -42,6 +55,7 @@ class ProfileUpdate(BaseModel):
     target_direction: str | None = None
     comment: str | None = None
     education: list[EducationItemUpdate] | None = None
+    experience: list[ExperienceItemUpdate] | None = None
 
 
 CompletenessState = Literal["empty", "partial", "complete"]

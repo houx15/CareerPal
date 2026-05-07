@@ -48,6 +48,7 @@ export function Workspace({ user, onLogout, profile: persistedProfile, onPatchPr
   const profile = useMemo<DemoProfile>(
     () => {
       const education = savedProfile.education ?? persistedProfile?.education;
+      const experience = savedProfile.experience ?? persistedProfile?.experience;
 
       return {
         ...sampleProfiles[lang],
@@ -66,12 +67,20 @@ export function Workspace({ user, onLogout, profile: persistedProfile, onPatchPr
                 state: education.length > 0 ? "complete" : "empty",
                 items: education,
               },
+        experience:
+          experience === undefined
+            ? sampleProfiles[lang].experience
+            : {
+                state: experience.length > 0 ? "complete" : "empty",
+                items: experience,
+              },
       };
     },
     [
       lang,
       persistedProfile?.comment,
       persistedProfile?.education,
+      persistedProfile?.experience,
       persistedProfile?.headline,
       persistedProfile?.contact_email,
       persistedProfile?.location,
@@ -80,6 +89,7 @@ export function Workspace({ user, onLogout, profile: persistedProfile, onPatchPr
       savedProfile.comment,
       savedProfile.contact_email,
       savedProfile.education,
+      savedProfile.experience,
       savedProfile.headline,
       savedProfile.location,
       savedProfile.name,

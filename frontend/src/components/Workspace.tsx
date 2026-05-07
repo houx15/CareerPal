@@ -1,4 +1,4 @@
-import type { CompletenessState, EducationItem } from "../lib/types";
+import type { CompletenessState, EducationItem, ExperienceItem } from "../lib/types";
 import type { ProfilePatch } from "../lib/types";
 import { Workspace as PrototypeWorkspace } from "./workspace/Workspace";
 
@@ -11,7 +11,7 @@ export interface WorkspaceProfile {
   target_direction: string | null;
   comment: string | null;
   education: EducationItem[];
-  experience: Record<string, unknown>[];
+  experience: ExperienceItem[];
   projects: Record<string, unknown>[];
   skills: Record<string, unknown>[];
   certificates: Record<string, unknown>[];
@@ -49,6 +49,7 @@ export function Workspace({ profile, onLogout, onPatchProfile }: WorkspaceProps)
         target_direction: profile.target_direction,
         comment: profile.comment,
         education: profile.education,
+        experience: profile.experience,
       }}
       onLogout={onLogout}
       onPatchProfile={async (payload) => {
@@ -62,6 +63,7 @@ export function Workspace({ profile, onLogout, onPatchProfile }: WorkspaceProps)
           target_direction: saved.target_direction ?? undefined,
           comment: saved.comment ?? undefined,
           education: saved.education,
+          experience: saved.experience,
         };
       }}
     />

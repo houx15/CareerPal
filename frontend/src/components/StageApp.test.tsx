@@ -105,6 +105,39 @@ describe("StageApp", () => {
     expect(screen.queryByText(/what should i call you/i)).not.toBeInTheDocument();
   });
 
+  it("renders persisted experience after login", async () => {
+    const api = apiMock();
+    api.getProfile.mockResolvedValue({
+      updated_at: "2026-05-05T00:00:00Z",
+      name: "Alex Chen",
+      headline: null,
+      target_direction: null,
+      comment: null,
+      education: [],
+      experience: [
+        {
+          company: "Stripe",
+          role: "Backend Engineering Intern",
+          time: "Summer 2025",
+          description: "Built reconciliation jobs for payment reporting.",
+          achievements: ["Reduced manual review time by 30%"],
+        },
+      ],
+      projects: [],
+      skills: [],
+      certificates: [],
+    });
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+
+    expect(await screen.findByText("Backend Engineering Intern · Stripe")).toBeInTheDocument();
+    expect(screen.getByText("Built reconciliation jobs for payment reporting.")).toBeInTheDocument();
+  });
+
   it("ignores repeated workspace clicks while the first load is pending", async () => {
     const api = apiMock();
     const profileLoad = deferred<Awaited<ReturnType<typeof api.getProfile>>>();
