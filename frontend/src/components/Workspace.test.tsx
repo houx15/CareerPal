@@ -400,6 +400,84 @@ describe("Workspace", () => {
     expect((skillsCard as HTMLElement).querySelectorAll(".profile-skill-pill")).toHaveLength(0);
   });
 
+  it("saves edited certificates through the profile patch callback with spec fields", async () => {
+    const user = userEvent.setup();
+    const { onPatchProfile } = renderWorkspace({
+      profile: {
+        certificates: [{ name: "AWS CCP", issuer: "AWS", date: "2025-04-15", comment: null }],
+      },
+    });
+    onPatchProfile.mockResolvedValue({
+      certificates: [{ name: "Azure Fundamentals", issuer: "Microsoft", date: "2025-08-20", comment: "Cloud baseline" }],
+    });
+
+    await user.click(screen.getByRole("button", { name: /edit certificates/i }));
+    await user.clear(screen.getByLabelText("Certificate name"));
+    await user.type(screen.getByLabelText("Certificate name"), "Azure Fundamentals");
+    await user.clear(screen.getByLabelText("Issuer"));
+    await user.type(screen.getByLabelText("Issuer"), "Microsoft");
+    await user.clear(screen.getByLabelText("Date"));
+    await user.type(screen.getByLabelText("Date"), "2025-08-20");
+    await user.type(screen.getByLabelText("Comment"), "  Cloud baseline  ");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(onPatchProfile).toHaveBeenCalledWith({
+      certificates: [{ name: "Azure Fundamentals", issuer: "Microsoft", date: "2025-08-20", comment: "Cloud baseline" }],
+    });
+    expect(await screen.findByText("Azure Fundamentals")).toBeInTheDocument();
+  });
+
+  it("renders persisted certificates and filters blank certificate names", () => {
+    renderWorkspace({
+      profile: {
+        certificates: [
+          { name: "AWS CCP", issuer: "Amazon Web Services", date: "2025-04-15", comment: "Cloud foundation" },
+          { name: "   ", issuer: "ScrumStudy", date: "2024-10-01", comment: null },
+        ],
+      },
+      completeness: {
+        sections: {
+          certificates: "partial",
+        },
+      },
+    });
+
+    const certificatesCard = screen.getByText("Certificates").closest("article");
+
+    expect(certificatesCard).not.toBeNull();
+    expect(within(certificatesCard as HTMLElement).getByText("Partial")).toBeInTheDocument();
+    expect(within(certificatesCard as HTMLElement).getByText("AWS CCP")).toBeInTheDocument();
+    expect(within(certificatesCard as HTMLElement).getByText("Amazon Web Services · 2025-04-15")).toBeInTheDocument();
+    expect(within(certificatesCard as HTMLElement).queryByText("ScrumStudy · 2024-10-01")).not.toBeInTheDocument();
+  });
+
+  it("uses saved certificate completeness before stale fetched completeness", async () => {
+    const user = userEvent.setup();
+    const { onPatchProfile } = renderWorkspace({
+      profile: { certificates: [] },
+      completeness: {
+        sections: {
+          certificates: "empty",
+        },
+      },
+    });
+    onPatchProfile.mockResolvedValue({
+      certificates: [{ name: "Azure Fundamentals", issuer: "Microsoft", date: "2025-08-20", comment: null }],
+    });
+
+    await user.click(screen.getByRole("button", { name: /edit certificates/i }));
+    await user.click(screen.getByRole("button", { name: /\+ add another/i }));
+    await user.type(screen.getByLabelText("Certificate name"), "Azure Fundamentals");
+    await user.type(screen.getByLabelText("Issuer"), "Microsoft");
+    await user.type(screen.getByLabelText("Date"), "2025-08-20");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    const certificatesCard = (await screen.findByText("Certificates")).closest("article");
+
+    expect(certificatesCard).not.toBeNull();
+    expect(within(certificatesCard as HTMLElement).getByText("Complete")).toBeInTheDocument();
+  });
+
   it("saves edited education through the profile patch callback and updates the card", async () => {
     const user = userEvent.setup();
     const { onPatchProfile } = renderWorkspace();

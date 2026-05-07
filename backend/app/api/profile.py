@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.db.session import get_db
-from app.models.user import Education, Experience, Profile, Project, Skill, User
+from app.models.user import Certificate, Education, Experience, Profile, Project, Skill, User
 from app.schemas.profile import (
+    CertificateItem,
     EducationItem,
     ExperienceItem,
     ProfileCompleteness,
@@ -70,6 +71,15 @@ def _profile_response(profile: Profile) -> ProfileResponse:
             )
             for item in sorted(profile.skill_items, key=lambda item: item.sort_order)
         ],
+        certificates=[
+            CertificateItem(
+                name=item.name,
+                issuer=item.issuer,
+                date=item.date,
+                comment=item.comment,
+            )
+            for item in sorted(profile.certificate_items, key=lambda item: item.sort_order)
+        ],
     )
 
 
@@ -99,6 +109,7 @@ def update_profile(
     experience = updates.pop("experience", None)
     projects = updates.pop("projects", None)
     skills = updates.pop("skills", None)
+    certificates = updates.pop("certificates", None)
     for field, value in updates.items():
         setattr(profile, field, value)
     if education is not None:
@@ -154,6 +165,18 @@ def update_profile(
             for index, item in enumerate(skills)
         ]
         profile.updated_at = datetime.now(timezone.utc)
+    if certificates is not None:
+        profile.certificate_items = [
+            Certificate(
+                name=item["name"],
+                issuer=item["issuer"],
+                date=item["date"],
+                comment=item.get("comment"),
+                sort_order=index,
+            )
+            for index, item in enumerate(certificates)
+        ]
+        profile.updated_at = datetime.now(timezone.utc)
     db.add(profile)
     db.commit()
     db.refresh(profile)
@@ -199,6 +222,9 @@ def get_profile_completeness(
         for item in profile.skill_items
     )
     skills = "complete" if has_complete_skill else "partial" if has_skills else "empty"
+    has_certificates = bool(profile.certificate_items)
+    has_complete_certificate = any(item.name.strip() and item.issuer.strip() and item.date for item in profile.certificate_items)
+    certificates = "complete" if has_complete_certificate else "partial" if has_certificates else "empty"
     sections = {
         "basics": basics,
         "summary": "empty",
@@ -206,6 +232,7 @@ def get_profile_completeness(
         "skills": skills,
         "projects": projects,
         "education": education,
+        "certificates": certificates,
     }
     overall = "partial" if any(state != "empty" for state in sections.values()) else "empty"
     return ProfileCompleteness(overall=overall, sections=sections)

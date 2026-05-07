@@ -233,6 +233,54 @@ describe("StageApp", () => {
     expect(within(skillsCard as HTMLElement).getByText("Python")).toBeInTheDocument();
   }, 10000);
 
+  it("renders persisted certificates after login", async () => {
+    const api = apiMock();
+    api.getProfile.mockResolvedValue({
+      updated_at: "2026-05-05T00:00:00Z",
+      name: "Alex Chen",
+      headline: null,
+      target_direction: null,
+      comment: null,
+      education: [],
+      experience: [],
+      projects: [],
+      skills: [],
+      certificates: [
+        {
+          name: "AWS Certified Cloud Practitioner",
+          issuer: "Amazon Web Services",
+          date: "2025-04-15",
+          comment: "Cloud foundation",
+        },
+      ],
+    });
+    api.getCompleteness.mockResolvedValue({
+      overall: "partial",
+      sections: {
+        basics: "partial",
+        summary: "empty",
+        experience: "empty",
+        skills: "empty",
+        projects: "empty",
+        education: "empty",
+        certificates: "complete",
+      },
+    });
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+
+    const certificatesCard = (await screen.findByText("Certificates")).closest("article");
+
+    expect(certificatesCard).not.toBeNull();
+    expect(within(certificatesCard as HTMLElement).getByText("Complete")).toBeInTheDocument();
+    expect(within(certificatesCard as HTMLElement).getByText("AWS Certified Cloud Practitioner")).toBeInTheDocument();
+    expect(within(certificatesCard as HTMLElement).getByText("Amazon Web Services · 2025-04-15")).toBeInTheDocument();
+  }, 10000);
+
   it("ignores repeated workspace clicks while the first load is pending", async () => {
     const api = apiMock();
     const profileLoad = deferred<Awaited<ReturnType<typeof api.getProfile>>>();

@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { sampleProfiles, type DemoProfile } from "../../fixtures/careerpalDemoData";
 import type { CopyKey } from "../../i18n/copy";
 import { LangToggle, useLang } from "../../i18n/LangProvider";
-import type { CompletenessState, ProfilePatch, ProjectItem, SkillItem } from "../../lib/types";
+import type { CertificateItem, CompletenessState, ProfilePatch, ProjectItem, SkillItem } from "../../lib/types";
 import { Slime } from "../Slime";
 import { ProfileDashboard, type ProfileSectionId } from "./ProfileDashboard";
 import { EditDrawer, ImproveChatOverlay } from "./WorkspaceOverlays";
@@ -42,7 +42,7 @@ const NAV: Array<{ id: Tab; label: CopyKey }> = [
 export function Workspace({ user, onLogout, profile: persistedProfile, completeness, onPatchProfile }: WorkspaceProps) {
   const { t, lang } = useLang();
   const [tab, setTab] = useState<Tab>("profile");
-  const [improveSection, setImproveSection] = useState<"any" | "basics" | "summary" | "experience" | "skills" | "projects" | "education" | null>(null);
+  const [improveSection, setImproveSection] = useState<"any" | "basics" | "summary" | "experience" | "skills" | "projects" | "education" | "certificates" | null>(null);
   const [editSection, setEditSection] = useState<ProfileSectionId | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [savedProfile, setSavedProfile] = useState<ProfilePatch>({});
@@ -54,6 +54,8 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
       const projectItems = projects?.map(normalizeProjectForWorkspace);
       const skills = savedProfile.skills ?? persistedProfile?.skills;
       const skillItems = skills?.map(normalizeSkillForWorkspace);
+      const certificates = savedProfile.certificates ?? persistedProfile?.certificates;
+      const certificateItems = certificates?.map(normalizeCertificateForWorkspace);
 
       return {
         ...sampleProfiles[lang],
@@ -93,6 +95,16 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
                 state: savedProfile.skills !== undefined ? skillSectionState(skillItems) : completeness?.sections.skills ?? skillSectionState(skillItems),
                 items: skillItems,
               },
+        certificates:
+          certificateItems === undefined
+            ? sampleProfiles[lang].certificates
+            : {
+                state:
+                  savedProfile.certificates !== undefined
+                    ? certificateSectionState(certificateItems)
+                    : completeness?.sections.certificates ?? certificateSectionState(certificateItems),
+                items: certificateItems,
+              },
       };
     },
     [
@@ -107,8 +119,10 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
       persistedProfile?.phone,
       persistedProfile?.projects,
       persistedProfile?.skills,
+      persistedProfile?.certificates,
       completeness?.sections.projects,
       completeness?.sections.skills,
+      completeness?.sections.certificates,
       savedProfile.comment,
       savedProfile.contact_email,
       savedProfile.education,
@@ -119,6 +133,7 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
       savedProfile.phone,
       savedProfile.projects,
       savedProfile.skills,
+      savedProfile.certificates,
       user.email,
       user.handle,
       user.initials,
@@ -214,6 +229,15 @@ function normalizeSkillForWorkspace(skill: SkillItem): DemoProfile["skills"]["it
   };
 }
 
+function normalizeCertificateForWorkspace(certificate: CertificateItem): CertificateItem {
+  return {
+    name: certificate.name || "",
+    issuer: certificate.issuer || "",
+    date: certificate.date || "",
+    comment: typeof certificate.comment === "string" ? certificate.comment : null,
+  };
+}
+
 function projectSectionState(projects: ProjectItem[]): CompletenessState {
   if (projects.length === 0) {
     return "empty";
@@ -236,6 +260,14 @@ function skillSectionState(skills: SkillItem[]): CompletenessState {
   }
 
   return skills.some((skill) => skill.name.trim() && skill.category.trim() && isSkillProficiency(skill.proficiency)) ? "complete" : "partial";
+}
+
+function certificateSectionState(certificates: CertificateItem[]): CompletenessState {
+  if (certificates.length === 0) {
+    return "empty";
+  }
+
+  return certificates.some((certificate) => certificate.name.trim() && certificate.issuer.trim() && certificate.date.trim()) ? "complete" : "partial";
 }
 
 function isSkillProficiency(value: unknown): value is SkillItem["proficiency"] {

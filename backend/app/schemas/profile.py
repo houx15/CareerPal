@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -56,6 +56,17 @@ class SkillItemUpdate(SkillItem):
     model_config = ConfigDict(extra="forbid")
 
 
+class CertificateItem(BaseModel):
+    name: str = Field(max_length=255)
+    issuer: str = Field(max_length=255)
+    date: date
+    comment: str | None = None
+
+
+class CertificateItemUpdate(CertificateItem):
+    model_config = ConfigDict(extra="forbid")
+
+
 class ProfileResponse(BaseModel):
     updated_at: datetime
     name: str | None = None
@@ -69,7 +80,7 @@ class ProfileResponse(BaseModel):
     experience: list[ExperienceItem] = Field(default_factory=list)
     projects: list[ProjectItem] = Field(default_factory=list)
     skills: list[SkillItem] = Field(default_factory=list)
-    certificates: list[dict] = Field(default_factory=list)
+    certificates: list[CertificateItem] = Field(default_factory=list)
 
 
 class ProfileUpdate(BaseModel):
@@ -86,6 +97,7 @@ class ProfileUpdate(BaseModel):
     experience: list[ExperienceItemUpdate] | None = None
     projects: list[ProjectItemUpdate] | None = None
     skills: list[SkillItemUpdate] | None = None
+    certificates: list[CertificateItemUpdate] | None = None
 
 
 CompletenessState = Literal["empty", "partial", "complete"]

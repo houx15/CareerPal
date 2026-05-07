@@ -1,7 +1,7 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -78,6 +78,11 @@ class Profile(Base):
         cascade="all, delete-orphan",
         order_by="Skill.sort_order",
     )
+    certificate_items: Mapped[list["Certificate"]] = relationship(
+        back_populates="profile",
+        cascade="all, delete-orphan",
+        order_by="Certificate.sort_order",
+    )
 
 
 class Education(Base):
@@ -139,3 +144,17 @@ class Skill(Base):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
 
     profile: Mapped[Profile] = relationship(back_populates="skill_items")
+
+
+class Certificate(Base):
+    __tablename__ = "certificates"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    profile_id: Mapped[str] = mapped_column(ForeignKey("profiles.id"), index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    issuer: Mapped[str] = mapped_column(String(255), nullable=False)
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    profile: Mapped[Profile] = relationship(back_populates="certificate_items")

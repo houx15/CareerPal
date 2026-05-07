@@ -5,7 +5,7 @@ import { useLang } from "../../i18n/LangProvider";
 import type { DemoProfile, SectionState } from "../../fixtures/careerpalDemoData";
 import { Slime } from "../Slime";
 
-export type ProfileSectionId = "basics" | "summarySec" | "experience" | "skills" | "projects" | "education";
+export type ProfileSectionId = "basics" | "summarySec" | "experience" | "skills" | "projects" | "education" | "certificates";
 
 const SECTIONS: Array<{ id: ProfileSectionId; icon: string; label: CopyKey; stateKey: keyof DemoProfile }> = [
   { id: "basics", icon: "◆", label: "sec_basics", stateKey: "basics" },
@@ -14,6 +14,7 @@ const SECTIONS: Array<{ id: ProfileSectionId; icon: string; label: CopyKey; stat
   { id: "skills", icon: "✜", label: "sec_skills", stateKey: "skills" },
   { id: "projects", icon: "◐", label: "sec_projects", stateKey: "projects" },
   { id: "education", icon: "▲", label: "sec_education", stateKey: "education" },
+  { id: "certificates", icon: "◇", label: "sec_certificates", stateKey: "certificates" },
 ];
 
 interface ProfileDashboardProps {
@@ -125,6 +126,22 @@ export function ProfileDashboard({ profile, onImprove, onSection }: ProfileDashb
                       <div className="profile-card-row-note">{item.time}</div>
                     </div>
                   ))}
+                </div>
+              ) : null}
+              {section.id === "certificates" ? (
+                <div className="profile-card-body">
+                  {profile.certificates.items
+                    .filter((item) => item.name.trim())
+                    .slice(0, 2)
+                    .map((item, index) => (
+                      <div className="profile-card-row" key={`${item.name}-${item.issuer}-${item.date}-${index}`}>
+                        <div className="profile-card-row-title">{item.name.trim()}</div>
+                        <div className="profile-card-row-meta">
+                          {[item.issuer, item.date].map((value) => value.trim()).filter(Boolean).join(" · ")}
+                        </div>
+                        {item.comment?.trim() ? <div className="profile-card-row-note">{item.comment.trim()}</div> : null}
+                      </div>
+                    ))}
                 </div>
               ) : null}
             </article>

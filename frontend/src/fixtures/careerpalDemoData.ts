@@ -1,5 +1,5 @@
 import type { Lang } from "../i18n/copy";
-import type { ExperienceItem, ProjectItem, SkillItem } from "../lib/types";
+import type { CertificateItem, ExperienceItem, ProjectItem, SkillItem } from "../lib/types";
 
 export type SectionState = "empty" | "partial" | "complete";
 type DemoExperienceItem = ExperienceItem & { co?: string; note?: string };
@@ -21,6 +21,7 @@ export interface DemoProfile {
   skills: { state: SectionState; items: DemoSkillItem[] };
   projects: { state: SectionState; items: DemoProjectItem[] };
   education: { state: SectionState; items: Array<{ school: string; degree: string; time: string }> };
+  certificates: { state: SectionState; items: CertificateItem[] };
 }
 
 export const sampleProfiles: Record<Lang, DemoProfile> = {
@@ -64,6 +65,7 @@ export const sampleProfiles: Record<Lang, DemoProfile> = {
       state: "complete",
       items: [{ school: "Carnegie Mellon", degree: "BFA, Design", time: "2013 - 2017" }],
     },
+    certificates: { state: "empty", items: [] },
   },
   zh: {
     name: "李思源",
@@ -105,5 +107,6 @@ export const sampleProfiles: Record<Lang, DemoProfile> = {
       state: "complete",
       items: [{ school: "同济大学", degree: "设计学士", time: "2013 - 2017" }],
     },
+    certificates: { state: "empty", items: [] },
   },
 };

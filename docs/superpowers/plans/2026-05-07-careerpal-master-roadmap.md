@@ -32,11 +32,13 @@ Completed slices:
 - Education persistence
 - Experience persistence
 - Projects persistence
+- Skills persistence
+- Certificates persistence
 
 Known verification status:
-- Backend unit tests passed after the projects slice.
-- Frontend unit tests, TypeScript, and production build passed after the projects slice.
-- Proxy API E2E passed for projects persistence.
+- Backend unit tests passed after the certificates slice.
+- Frontend unit tests, TypeScript, and production build passed after the certificates slice.
+- Proxy API E2E passed for certificates persistence.
 - Full browser UI E2E is still blocked by local Playwright/browser-install environment issues.
 
 ---
@@ -65,7 +67,7 @@ Known verification status:
 
 ### Slice 1.2: Skills Persistence
 
-**Status:** Current slice.
+**Status:** Complete.
 
 **Scope:**
 - Add backend `Skill` model/table/migration.
@@ -80,6 +82,8 @@ Known verification status:
 - Completeness updates correctly.
 
 ### Slice 1.3: Certificates Persistence
+
+**Status:** Complete.
 
 **Scope:**
 - Add backend `Certificate` model/table/migration.

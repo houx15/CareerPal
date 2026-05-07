@@ -4,11 +4,11 @@ import { useRef, useState } from "react";
 import type { CopyKey } from "../../i18n/copy";
 import { useLang } from "../../i18n/LangProvider";
 import type { DemoProfile } from "../../fixtures/careerpalDemoData";
-import type { EducationItem, ExperienceItem, ProfilePatch, ProjectItem, SkillItem, SkillProficiency } from "../../lib/types";
+import type { CertificateItem, EducationItem, ExperienceItem, ProfilePatch, ProjectItem, SkillItem, SkillProficiency } from "../../lib/types";
 import { Slime } from "../Slime";
 import type { ProfileSectionId } from "./ProfileDashboard";
 
-type ImproveSection = "any" | "basics" | "summary" | "experience" | "skills" | "projects" | "education";
+type ImproveSection = "any" | "basics" | "summary" | "experience" | "skills" | "projects" | "education" | "certificates";
 
 const IMPROVE_SECTIONS: Array<{ id: ImproveSection; label: CopyKey }> = [
   { id: "any", label: "improve_any" },
@@ -18,6 +18,7 @@ const IMPROVE_SECTIONS: Array<{ id: ImproveSection; label: CopyKey }> = [
   { id: "skills", label: "improve_chip_skills" },
   { id: "projects", label: "improve_chip_projects" },
   { id: "education", label: "improve_chip_education" },
+  { id: "certificates", label: "improve_chip_certificates" },
 ];
 
 export function ImproveChatOverlay({
@@ -318,7 +319,34 @@ export function EditDrawer({
               </button>
             </>
           ) : null}
-          {section !== "basics" && section !== "summarySec" && section !== "experience" && section !== "education" && section !== "skills" && section !== "projects" ? (
+          {section === "certificates" ? (
+            <>
+              {draft.certificates.items.map((certificate, index) => (
+                <fieldset className="edit-card" key={index}>
+                  <legend className="sr-only">Certificate {index + 1}</legend>
+                  <Field label="Certificate name" value={certificate.name} onChange={(value) => updateCertificateItem(index, "name", value)} />
+                  <div className="edit-card-row">
+                    <Field label="Issuer" value={certificate.issuer} onChange={(value) => updateCertificateItem(index, "issuer", value)} />
+                    <Field label="Date" value={certificate.date} onChange={(value) => updateCertificateItem(index, "date", value)} />
+                  </div>
+                  <Field label="Comment" value={certificate.comment ?? ""} onChange={(value) => updateCertificateItem(index, "comment", value)} multiline rows={2} />
+                  <button className="edit-remove" type="button" aria-label={`Remove certificate ${index + 1}`} onClick={() => removeCertificateItem(index)}>
+                    Remove
+                  </button>
+                </fieldset>
+              ))}
+              <button className="edit-add" type="button" onClick={addCertificateItem}>
+                + Add another
+              </button>
+            </>
+          ) : null}
+          {section !== "basics" &&
+          section !== "summarySec" &&
+          section !== "experience" &&
+          section !== "education" &&
+          section !== "skills" &&
+          section !== "projects" &&
+          section !== "certificates" ? (
             <>
               <Field label="Name" value={draft.name} onChange={(value) => setDraft((current) => ({ ...current, name: value }))} />
               <Field label="Role" value={draft.role} onChange={(value) => setDraft((current) => ({ ...current, role: value }))} />
@@ -377,6 +405,16 @@ export function EditDrawer({
       skills: {
         ...current.skills,
         items: current.skills.items.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item)),
+      },
+    }));
+  }
+
+  function updateCertificateItem<K extends keyof CertificateItem>(index: number, key: K, value: CertificateItem[K]) {
+    setDraft((current) => ({
+      ...current,
+      certificates: {
+        ...current.certificates,
+        items: current.certificates.items.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item)),
       },
     }));
   }
@@ -457,6 +495,26 @@ export function EditDrawer({
       education: {
         ...current.education,
         items: current.education.items.filter((_, itemIndex) => itemIndex !== index),
+      },
+    }));
+  }
+
+  function addCertificateItem() {
+    setDraft((current) => ({
+      ...current,
+      certificates: {
+        ...current.certificates,
+        items: [...current.certificates.items, { name: "", issuer: "", date: "", comment: null }],
+      },
+    }));
+  }
+
+  function removeCertificateItem(index: number) {
+    setDraft((current) => ({
+      ...current,
+      certificates: {
+        ...current.certificates,
+        items: current.certificates.items.filter((_, itemIndex) => itemIndex !== index),
       },
     }));
   }
@@ -543,6 +601,10 @@ function profilePatchForSection(section: ProfileSectionId, profile: DemoProfile)
     return { skills: profile.skills.items.map(normalizeSkillItem) };
   }
 
+  if (section === "certificates") {
+    return { certificates: profile.certificates.items.map(normalizeCertificateItem) };
+  }
+
   return {};
 }
 
@@ -563,6 +625,15 @@ function normalizeSkillItem(skill: SkillItem): SkillItem {
     category: skill.category.trim(),
     proficiency: skill.proficiency,
     comment: skill.comment?.trim() || null,
+  };
+}
+
+function normalizeCertificateItem(certificate: CertificateItem): CertificateItem {
+  return {
+    name: certificate.name.trim(),
+    issuer: certificate.issuer.trim(),
+    date: certificate.date.trim(),
+    comment: certificate.comment?.trim() || null,
   };
 }
 

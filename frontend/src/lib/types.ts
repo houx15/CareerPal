@@ -58,6 +58,13 @@ export interface SkillItem extends Record<string, unknown> {
   level?: number;
 }
 
+export interface CertificateItem {
+  name: string;
+  issuer: string;
+  date: string;
+  comment?: string | null;
+}
+
 export interface Profile {
   updated_at: string;
   name: string | null;
@@ -71,7 +78,7 @@ export interface Profile {
   experience: ExperienceItem[];
   projects: ProjectItem[];
   skills: SkillItem[];
-  certificates: Record<string, unknown>[];
+  certificates: CertificateItem[];
 }
 
 export type ProfilePatch = Partial<
@@ -88,6 +95,7 @@ export type ProfilePatch = Partial<
     | "experience"
     | "projects"
     | "skills"
+    | "certificates"
   >
 >;
 

@@ -1,5 +1,7 @@
 from datetime import datetime
 
+import pytest
+
 
 def auth_headers(client):
     response = client.post(
@@ -506,6 +508,96 @@ def test_profile_patch_replaces_skills_with_empty_list(client):
     assert client.get("/api/profile", headers=headers).json()["skills"] == []
 
 
+def test_profile_patch_replaces_certificates_in_display_order(client):
+    headers = auth_headers(client)
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "certificates": [
+                {
+                    "name": "AWS Certified Cloud Practitioner",
+                    "issuer": "Amazon Web Services",
+                    "date": "2025-04-15",
+                    "comment": "Cloud foundation",
+                },
+                {
+                    "name": "Scrum Fundamentals",
+                    "issuer": "ScrumStudy",
+                    "date": "2024-10-01",
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["certificates"] == [
+        {
+            "name": "AWS Certified Cloud Practitioner",
+            "issuer": "Amazon Web Services",
+            "date": "2025-04-15",
+            "comment": "Cloud foundation",
+        },
+        {
+            "name": "Scrum Fundamentals",
+            "issuer": "ScrumStudy",
+            "date": "2024-10-01",
+            "comment": None,
+        },
+    ]
+    assert client.get("/api/profile", headers=headers).json()["certificates"] == response.json()["certificates"]
+
+
+def test_profile_patch_replaces_certificates_with_empty_list(client):
+    headers = auth_headers(client)
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"certificates": [{"name": "AWS CCP", "issuer": "AWS", "date": "2025-04-15"}]},
+    )
+
+    response = client.patch("/api/profile", headers=headers, json={"certificates": []})
+
+    assert response.status_code == 200
+    assert response.json()["certificates"] == []
+    assert client.get("/api/profile", headers=headers).json()["certificates"] == []
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("name", "C" * 256),
+        ("issuer", "I" * 256),
+        ("date", "D" * 121),
+    ],
+)
+def test_profile_patch_rejects_overlong_certificate_fields(client, field, value):
+    headers = auth_headers(client)
+    certificate = {"name": "AWS CCP", "issuer": "AWS", "date": "2025-04-15"}
+    certificate[field] = value
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"certificates": [certificate]},
+    )
+
+    assert response.status_code == 422
+
+
+def test_profile_patch_rejects_malformed_certificate_date(client):
+    headers = auth_headers(client)
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"certificates": [{"name": "AWS CCP", "issuer": "AWS", "date": "not a date"}]},
+    )
+
+    assert response.status_code == 422
+
+
 def test_completeness_reflects_name_and_empty_sections(client):
     headers = auth_headers(client)
     client.patch("/api/profile", headers=headers, json={"name": "Alex Chen"})
@@ -522,6 +614,7 @@ def test_completeness_reflects_name_and_empty_sections(client):
             "skills": "empty",
             "projects": "empty",
             "education": "empty",
+            "certificates": "empty",
         },
     }
 
@@ -665,3 +758,31 @@ def test_completeness_reports_skill_empty_partial_and_complete_states(client):
     assert complete_response.status_code == 200
     assert complete_response.json()["sections"]["skills"] == "complete"
     assert complete_response.json()["overall"] == "partial"
+
+
+def test_completeness_reports_certificates_complete_when_required_fields_exist(client):
+    headers = auth_headers(client)
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"certificates": [{"name": "AWS CCP", "issuer": "AWS", "date": "2025-04-15"}]},
+    )
+
+    response = client.get("/api/profile/completeness", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["sections"]["certificates"] == "complete"
+
+
+def test_completeness_reports_certificates_partial_when_items_are_incomplete(client):
+    headers = auth_headers(client)
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"certificates": [{"name": "AWS CCP", "issuer": "", "date": "2025-04-15"}]},
+    )
+
+    response = client.get("/api/profile/completeness", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["sections"]["certificates"] == "partial"
