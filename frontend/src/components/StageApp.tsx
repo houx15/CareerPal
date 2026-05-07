@@ -123,7 +123,9 @@ function StageAppInner({ api }: StageAppProps) {
 
   async function handlePatchProfile(payload: ProfilePatch): Promise<Partial<WorkspaceProfile>> {
     const saved = await client.patchProfile(payload);
+    const nextCompleteness = await client.getCompleteness();
     setProfile((current) => (current ? { ...current, ...saved } : current));
+    setCompleteness(nextCompleteness);
     return saved;
   }
 

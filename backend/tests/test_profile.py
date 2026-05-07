@@ -609,6 +609,7 @@ def test_completeness_reflects_name_and_empty_sections(client):
         "overall": "partial",
         "sections": {
             "basics": "partial",
+            "contact": "empty",
             "summary": "empty",
             "experience": "empty",
             "skills": "empty",
@@ -617,6 +618,102 @@ def test_completeness_reflects_name_and_empty_sections(client):
             "certificates": "empty",
         },
     }
+
+
+def test_completeness_reports_empty_profile_contract(client):
+    headers = auth_headers(client)
+
+    response = client.get("/api/profile/completeness", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "overall": "empty",
+        "sections": {
+            "basics": "empty",
+            "contact": "empty",
+            "summary": "empty",
+            "experience": "empty",
+            "skills": "empty",
+            "projects": "empty",
+            "education": "empty",
+            "certificates": "empty",
+        },
+    }
+
+
+def test_completeness_reports_sparse_profile_as_partial_contract(client):
+    headers = auth_headers(client)
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "name": "Alex Chen",
+            "phone": "+1 555 0100",
+            "education": [{"school": "University of Washington", "degree": "", "time": ""}],
+            "experience": [{"company": "Campus IT", "role": "", "time": "", "description": "", "achievements": []}],
+            "projects": [{"name": "CareerPal"}],
+            "skills": [{"name": "Python", "category": "", "proficiency": "advanced"}],
+            "certificates": [{"name": "AWS CCP", "issuer": "", "date": "2025-04-15"}],
+        },
+    )
+
+    response = client.get("/api/profile/completeness", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["overall"] == "partial"
+    assert response.json()["sections"] == {
+        "basics": "partial",
+        "contact": "partial",
+        "summary": "empty",
+        "experience": "partial",
+        "skills": "partial",
+        "projects": "partial",
+        "education": "partial",
+        "certificates": "partial",
+    }
+
+
+def test_completeness_reports_complete_profile_contract(client):
+    headers = auth_headers(client)
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "name": "Alex Chen",
+            "headline": "Backend engineer",
+            "target_direction": "Platform engineering",
+            "phone": "+1 555 0100",
+            "contact_email": "alex.contact@example.com",
+            "location": "Seattle, WA",
+            "comment": "I build reliable student tools.",
+            "education": [{"school": "University of Washington", "degree": "B.S. CS", "time": "2023 - 2027"}],
+            "experience": [
+                {
+                    "company": "Stripe",
+                    "role": "Backend Engineering Intern",
+                    "time": "Summer 2025",
+                    "description": "Built reconciliation jobs.",
+                    "achievements": ["Reduced manual review time by 30%"],
+                }
+            ],
+            "projects": [
+                {
+                    "name": "CareerPal",
+                    "description": "Built profile persistence.",
+                    "tech_stack": ["Next.js"],
+                    "achievements": ["Saved profile data"],
+                }
+            ],
+            "skills": [{"name": "Python", "category": "Programming", "proficiency": "advanced"}],
+            "certificates": [{"name": "AWS CCP", "issuer": "AWS", "date": "2025-04-15"}],
+        },
+    )
+
+    response = client.get("/api/profile/completeness", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["overall"] == "complete"
+    assert set(response.json()["sections"].values()) == {"complete"}
 
 
 def test_completeness_reports_education_complete_when_required_fields_exist(client):

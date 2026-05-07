@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { sampleProfiles, type DemoProfile } from "../../fixtures/careerpalDemoData";
 import type { CopyKey } from "../../i18n/copy";
 import { LangToggle, useLang } from "../../i18n/LangProvider";
-import type { CertificateItem, CompletenessState, ProfilePatch, ProjectItem, SkillItem } from "../../lib/types";
+import type { CertificateItem, CompletenessState, EducationItem, ExperienceItem, ProfilePatch, ProjectItem, SkillItem } from "../../lib/types";
 import { Slime } from "../Slime";
 import { ProfileDashboard, type ProfileSectionId } from "./ProfileDashboard";
 import { EditDrawer, ImproveChatOverlay } from "./WorkspaceOverlays";
@@ -46,6 +46,15 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
   const [editSection, setEditSection] = useState<ProfileSectionId | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [savedProfile, setSavedProfile] = useState<ProfilePatch>({});
+  const [localSectionOverrides, setLocalSectionOverrides] = useState<Set<ProfileSectionId>>(new Set());
+  const lastCompletenessRef = useRef<WorkspaceProps["completeness"] | undefined>(undefined);
+  useEffect(() => {
+    if (lastCompletenessRef.current && lastCompletenessRef.current !== completeness) {
+      setLocalSectionOverrides(new Set());
+    }
+    lastCompletenessRef.current = completeness;
+  }, [completeness]);
+
   const profile = useMemo<DemoProfile>(
     () => {
       const education = savedProfile.education ?? persistedProfile?.education;
@@ -56,6 +65,11 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
       const skillItems = skills?.map(normalizeSkillForWorkspace);
       const certificates = savedProfile.certificates ?? persistedProfile?.certificates;
       const certificateItems = certificates?.map(normalizeCertificateForWorkspace);
+      const hasSavedBasics = localSectionOverrides.has("basics");
+      const hasPersistedBasics =
+        persistedProfile?.name !== undefined || persistedProfile?.headline !== undefined || persistedProfile?.target_direction !== undefined;
+      const hasSavedSummary = localSectionOverrides.has("summarySec");
+      const hasPersistedSummary = persistedProfile?.comment !== undefined;
 
       return {
         ...sampleProfiles[lang],
@@ -67,32 +81,57 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
         location: savedProfile.location ?? persistedProfile?.location ?? sampleProfiles[lang].location,
         phone: savedProfile.phone ?? persistedProfile?.phone ?? sampleProfiles[lang].phone,
         summary: savedProfile.comment ?? persistedProfile?.comment ?? sampleProfiles[lang].summary,
+        basics:
+          hasSavedBasics || hasPersistedBasics
+            ? {
+                state: hasSavedBasics
+                  ? basicsSectionState({
+                      name: savedProfile.name ?? persistedProfile?.name,
+                      headline: savedProfile.headline ?? persistedProfile?.headline,
+                      target_direction: savedProfile.target_direction ?? persistedProfile?.target_direction,
+                    })
+                  : completeness?.sections.basics ??
+                    basicsSectionState({
+                      name: persistedProfile?.name,
+                      headline: persistedProfile?.headline,
+                      target_direction: persistedProfile?.target_direction,
+                    }),
+              }
+            : sampleProfiles[lang].basics,
+        summarySec:
+          hasSavedSummary || hasPersistedSummary
+            ? {
+                state: hasSavedSummary
+                  ? summarySectionState(savedProfile.comment ?? persistedProfile?.comment)
+                  : completeness?.sections.summary ?? summarySectionState(persistedProfile?.comment),
+              }
+            : sampleProfiles[lang].summarySec,
         education:
           education === undefined
             ? sampleProfiles[lang].education
             : {
-                state: education.length > 0 ? "complete" : "empty",
+                state: localSectionOverrides.has("education") ? educationSectionState(education) : completeness?.sections.education ?? educationSectionState(education),
                 items: education,
               },
         experience:
           experience === undefined
             ? sampleProfiles[lang].experience
             : {
-                state: experience.length > 0 ? "complete" : "empty",
+                state: localSectionOverrides.has("experience") ? experienceSectionState(experience) : completeness?.sections.experience ?? experienceSectionState(experience),
                 items: experience,
               },
         projects:
           projectItems === undefined
             ? sampleProfiles[lang].projects
             : {
-                state: savedProfile.projects !== undefined ? projectSectionState(projectItems) : completeness?.sections.projects ?? projectSectionState(projectItems),
+                state: localSectionOverrides.has("projects") ? projectSectionState(projectItems) : completeness?.sections.projects ?? projectSectionState(projectItems),
                 items: projectItems,
               },
         skills:
           skillItems === undefined
             ? sampleProfiles[lang].skills
             : {
-                state: savedProfile.skills !== undefined ? skillSectionState(skillItems) : completeness?.sections.skills ?? skillSectionState(skillItems),
+                state: localSectionOverrides.has("skills") ? skillSectionState(skillItems) : completeness?.sections.skills ?? skillSectionState(skillItems),
                 items: skillItems,
               },
         certificates:
@@ -100,7 +139,7 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
             ? sampleProfiles[lang].certificates
             : {
                 state:
-                  savedProfile.certificates !== undefined
+                  localSectionOverrides.has("certificates")
                     ? certificateSectionState(certificateItems)
                     : completeness?.sections.certificates ?? certificateSectionState(certificateItems),
                 items: certificateItems,
@@ -117,12 +156,18 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
       persistedProfile?.location,
       persistedProfile?.name,
       persistedProfile?.phone,
+      persistedProfile?.target_direction,
       persistedProfile?.projects,
       persistedProfile?.skills,
       persistedProfile?.certificates,
+      completeness?.sections.basics,
+      completeness?.sections.summary,
+      completeness?.sections.education,
+      completeness?.sections.experience,
       completeness?.sections.projects,
       completeness?.sections.skills,
       completeness?.sections.certificates,
+      localSectionOverrides,
       savedProfile.comment,
       savedProfile.contact_email,
       savedProfile.education,
@@ -131,6 +176,7 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
       savedProfile.location,
       savedProfile.name,
       savedProfile.phone,
+      savedProfile.target_direction,
       savedProfile.projects,
       savedProfile.skills,
       savedProfile.certificates,
@@ -147,6 +193,7 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
   }
 
   async function patchProfile(payload: ProfilePatch): Promise<void> {
+    setLocalSectionOverrides(sectionOverridesForPatch(payload));
     const nextProfile = onPatchProfile ? await onPatchProfile(payload) : payload;
     setSavedProfile((current) => ({ ...current, ...payload, ...nextProfile }));
   }
@@ -203,6 +250,32 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
   );
 }
 
+function sectionOverridesForPatch(payload: ProfilePatch): Set<ProfileSectionId> {
+  const sections = new Set<ProfileSectionId>();
+  if (payload.name !== undefined || payload.headline !== undefined || payload.target_direction !== undefined) {
+    sections.add("basics");
+  }
+  if (payload.comment !== undefined) {
+    sections.add("summarySec");
+  }
+  if (payload.education !== undefined) {
+    sections.add("education");
+  }
+  if (payload.experience !== undefined) {
+    sections.add("experience");
+  }
+  if (payload.projects !== undefined) {
+    sections.add("projects");
+  }
+  if (payload.skills !== undefined) {
+    sections.add("skills");
+  }
+  if (payload.certificates !== undefined) {
+    sections.add("certificates");
+  }
+  return sections;
+}
+
 function normalizeProjectForWorkspace(project: ProjectItem): ProjectItem {
   return {
     ...project,
@@ -238,6 +311,39 @@ function normalizeCertificateForWorkspace(certificate: CertificateItem): Certifi
   };
 }
 
+function basicsSectionState(values: { name?: string | null; headline?: string | null; target_direction?: string | null }): CompletenessState {
+  return fieldsState([values.name, values.headline, values.target_direction]);
+}
+
+function summarySectionState(comment?: string | null): CompletenessState {
+  return hasText(comment) ? "complete" : "empty";
+}
+
+function educationSectionState(education: EducationItem[]): CompletenessState {
+  if (education.length === 0) {
+    return "empty";
+  }
+
+  return education.some((item) => hasText(item.school) && hasText(item.degree) && hasText(item.time)) ? "complete" : "partial";
+}
+
+function experienceSectionState(experience: ExperienceItem[]): CompletenessState {
+  if (experience.length === 0) {
+    return "empty";
+  }
+
+  return experience.some(
+    (item) =>
+      hasText(item.company) &&
+      hasText(item.role) &&
+      hasText(item.time) &&
+      hasText(item.description) &&
+      item.achievements.some((achievement) => hasText(achievement)),
+  )
+    ? "complete"
+    : "partial";
+}
+
 function projectSectionState(projects: ProjectItem[]): CompletenessState {
   if (projects.length === 0) {
     return "empty";
@@ -245,10 +351,10 @@ function projectSectionState(projects: ProjectItem[]): CompletenessState {
 
   const hasCompleteProject = projects.some(
     (project) =>
-      project.name.trim() &&
-      project.description.trim() &&
-      project.tech_stack.some((tech) => tech.trim()) &&
-      project.achievements.some((achievement) => achievement.trim()),
+      hasText(project.name) &&
+      hasText(project.description) &&
+      project.tech_stack.some((tech) => hasText(tech)) &&
+      project.achievements.some((achievement) => hasText(achievement)),
   );
 
   return hasCompleteProject ? "complete" : "partial";
@@ -259,7 +365,7 @@ function skillSectionState(skills: SkillItem[]): CompletenessState {
     return "empty";
   }
 
-  return skills.some((skill) => skill.name.trim() && skill.category.trim() && isSkillProficiency(skill.proficiency)) ? "complete" : "partial";
+  return skills.some((skill) => hasText(skill.name) && hasText(skill.category) && isSkillProficiency(skill.proficiency)) ? "complete" : "partial";
 }
 
 function certificateSectionState(certificates: CertificateItem[]): CompletenessState {
@@ -267,7 +373,22 @@ function certificateSectionState(certificates: CertificateItem[]): CompletenessS
     return "empty";
   }
 
-  return certificates.some((certificate) => certificate.name.trim() && certificate.issuer.trim() && certificate.date.trim()) ? "complete" : "partial";
+  return certificates.some((certificate) => hasText(certificate.name) && hasText(certificate.issuer) && hasText(certificate.date)) ? "complete" : "partial";
+}
+
+function fieldsState(values: Array<string | null | undefined>): CompletenessState {
+  const presentCount = values.filter(hasText).length;
+  if (presentCount === values.length) {
+    return "complete";
+  }
+  if (presentCount > 0) {
+    return "partial";
+  }
+  return "empty";
+}
+
+function hasText(value: string | null | undefined): boolean {
+  return Boolean(value?.trim());
 }
 
 function isSkillProficiency(value: unknown): value is SkillItem["proficiency"] {

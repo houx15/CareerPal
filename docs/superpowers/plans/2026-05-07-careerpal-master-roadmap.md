@@ -34,6 +34,7 @@ Completed slices:
 - Projects persistence
 - Skills persistence
 - Certificates persistence
+- Profile completeness contract
 
 Known verification status:
 - Backend unit tests passed after the certificates slice.
@@ -97,10 +98,12 @@ Known verification status:
 
 ### Slice 1.4: Profile Completeness Contract
 
+**Status:** Complete.
+
 **Scope:**
-- Normalize completeness rules for basics, contact, education, experience, projects, skills, certificates.
-- Ensure frontend node/card states map consistently to backend values.
-- Add tests for empty, sparse, partial, and complete examples.
+- Normalized completeness rules for basics, contact, summary, education, experience, projects, skills, certificates.
+- Ensured frontend node/card states map consistently to backend values for persisted sections.
+- Added tests for empty, sparse/partial, and complete examples.
 
 **Acceptance:**
 - Workspace visualization reflects backend completeness deterministically.

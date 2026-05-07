@@ -92,6 +92,27 @@ def _current_profile(current_user: User, db: Session) -> Profile:
     return current_user.profile
 
 
+def _has_text(value: str | None) -> bool:
+    return bool(value and value.strip())
+
+
+def _fields_state(values: list[str | None]) -> str:
+    present_count = sum(1 for value in values if _has_text(value))
+    if present_count == len(values):
+        return "complete"
+    if present_count > 0:
+        return "partial"
+    return "empty"
+
+
+def _items_state(items: list, is_complete) -> str:
+    if any(is_complete(item) for item in items):
+        return "complete"
+    if items:
+        return "partial"
+    return "empty"
+
+
 @router.get("", response_model=ProfileResponse)
 def get_profile(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> ProfileResponse:
     return _profile_response(_current_profile(current_user, db))
@@ -189,52 +210,55 @@ def get_profile_completeness(
     db: Session = Depends(get_db),
 ) -> ProfileCompleteness:
     profile = _current_profile(current_user, db)
-    basics = "partial" if any([profile.name, profile.headline, profile.target_direction]) else "empty"
-    has_education = bool(profile.education_items)
-    has_complete_education = any(
-        item.school.strip() and item.degree.strip() and item.time.strip() for item in profile.education_items
+    basics = _fields_state([profile.name, profile.headline, profile.target_direction])
+    contact = _fields_state([profile.phone, profile.contact_email, profile.location])
+    summary = "complete" if _has_text(profile.comment) else "empty"
+    education = _items_state(
+        profile.education_items,
+        lambda item: _has_text(item.school) and _has_text(item.degree) and _has_text(item.time),
     )
-    education = "complete" if has_complete_education else "partial" if has_education else "empty"
-    has_experience = bool(profile.experience_items)
-    has_complete_experience = any(
-        item.company.strip()
-        and item.role.strip()
-        and item.time.strip()
-        and item.description.strip()
-        and item.achievements
-        for item in profile.experience_items
+    experience = _items_state(
+        profile.experience_items,
+        lambda item: _has_text(item.company)
+        and _has_text(item.role)
+        and _has_text(item.time)
+        and _has_text(item.description)
+        and any(_has_text(achievement) for achievement in item.achievements),
     )
-    experience = "complete" if has_complete_experience else "partial" if has_experience else "empty"
-    has_projects = bool(profile.project_items)
-    has_complete_project = any(
-        item.name.strip()
-        and item.description.strip()
-        and any(tech.strip() for tech in item.tech_stack)
-        and any(achievement.strip() for achievement in item.achievements)
-        for item in profile.project_items
+    projects = _items_state(
+        profile.project_items,
+        lambda item: _has_text(item.name)
+        and _has_text(item.description)
+        and any(_has_text(tech) for tech in item.tech_stack)
+        and any(_has_text(achievement) for achievement in item.achievements),
     )
-    projects = "complete" if has_complete_project else "partial" if has_projects else "empty"
-    has_skills = bool(profile.skill_items)
-    has_complete_skill = any(
-        item.name.strip()
-        and item.category.strip()
-        and item.proficiency in {"beginner", "intermediate", "advanced", "expert"}
-        for item in profile.skill_items
+    skills = _items_state(
+        profile.skill_items,
+        lambda item: _has_text(item.name)
+        and _has_text(item.category)
+        and item.proficiency in {"beginner", "intermediate", "advanced", "expert"},
     )
-    skills = "complete" if has_complete_skill else "partial" if has_skills else "empty"
-    has_certificates = bool(profile.certificate_items)
-    has_complete_certificate = any(item.name.strip() and item.issuer.strip() and item.date for item in profile.certificate_items)
-    certificates = "complete" if has_complete_certificate else "partial" if has_certificates else "empty"
+    certificates = _items_state(
+        profile.certificate_items,
+        lambda item: _has_text(item.name) and _has_text(item.issuer) and item.date is not None,
+    )
     sections = {
         "basics": basics,
-        "summary": "empty",
+        "contact": contact,
+        "summary": summary,
         "experience": experience,
         "skills": skills,
         "projects": projects,
         "education": education,
         "certificates": certificates,
     }
-    overall = "partial" if any(state != "empty" for state in sections.values()) else "empty"
+    dashboard_sections = ["basics", "summary", "experience", "skills", "projects", "education", "certificates"]
+    if all(sections[section] == "complete" for section in dashboard_sections):
+        overall = "complete"
+    elif any(state != "empty" for state in sections.values()):
+        overall = "partial"
+    else:
+        overall = "empty"
     return ProfileCompleteness(overall=overall, sections=sections)
 
 

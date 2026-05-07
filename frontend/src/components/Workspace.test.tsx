@@ -93,6 +93,32 @@ describe("Workspace", () => {
     expect(await screen.findByText("I build reliable backend systems for campus products.")).toBeInTheDocument();
   });
 
+  it("uses backend completeness for persisted basics summary experience and education", () => {
+    renderWorkspace({
+      profile: {
+        name: "Alex Chen",
+        headline: "Backend engineer",
+        target_direction: "Platform engineering",
+        comment: "I build reliable student tools.",
+        experience: [{ company: "Campus IT", role: "", time: "2024", description: "", achievements: [] }],
+        education: [{ school: "University of Washington", degree: "", time: "" }],
+      },
+      completeness: {
+        sections: {
+          basics: "complete",
+          summary: "complete",
+          experience: "partial",
+          education: "partial",
+        },
+      },
+    });
+
+    expect(within(screen.getByText("Basics").closest("article") as HTMLElement).getByText("Complete")).toBeInTheDocument();
+    expect(within(screen.getByText("Summary").closest("article") as HTMLElement).getByText("Complete")).toBeInTheDocument();
+    expect(within(screen.getByText("Experience").closest("article") as HTMLElement).getByText("Partial")).toBeInTheDocument();
+    expect(within(screen.getByText("Education").closest("article") as HTMLElement).getByText("Partial")).toBeInTheDocument();
+  });
+
   it("saves edited experience through the profile patch callback and updates the card", async () => {
     const user = userEvent.setup();
     const { onPatchProfile } = renderWorkspace();
@@ -540,5 +566,30 @@ describe("Workspace", () => {
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 
     expect(onPatchProfile).toHaveBeenCalledWith({ education: [] });
+  });
+
+  it("keeps saved education and experience status current before completeness refetch", async () => {
+    const user = userEvent.setup();
+    const { onPatchProfile } = renderWorkspace({
+      profile: { education: [], experience: [] },
+      completeness: {
+        sections: {
+          education: "empty",
+          experience: "empty",
+        },
+      },
+    });
+    onPatchProfile.mockResolvedValue({
+      education: [{ school: "University of Washington", degree: "B.S. CS", time: "2023 - 2027" }],
+    });
+
+    await user.click(screen.getByRole("button", { name: /edit education/i }));
+    await user.click(screen.getByRole("button", { name: /\+ add another/i }));
+    await user.type(screen.getByLabelText("School"), "University of Washington");
+    await user.type(screen.getByLabelText("Degree"), "B.S. CS");
+    await user.type(screen.getByLabelText("Time period"), "2023 - 2027");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(within((await screen.findByText("Education")).closest("article") as HTMLElement).getByText("Complete")).toBeInTheDocument();
   });
 });

@@ -281,6 +281,71 @@ describe("StageApp", () => {
     expect(within(certificatesCard as HTMLElement).getByText("Amazon Web Services · 2025-04-15")).toBeInTheDocument();
   }, 10000);
 
+  it("refetches completeness after profile edits and lets backend section state retake authority", async () => {
+    const api = apiMock();
+    api.getProfile.mockResolvedValue({
+      updated_at: "2026-05-05T00:00:00Z",
+      name: "Alex Chen",
+      headline: null,
+      target_direction: null,
+      comment: null,
+      education: [],
+      experience: [],
+      projects: [],
+      skills: [],
+      certificates: [],
+    });
+    api.getCompleteness
+      .mockResolvedValueOnce({
+        overall: "empty",
+        sections: {
+          basics: "empty",
+          contact: "empty",
+          summary: "empty",
+          experience: "empty",
+          skills: "empty",
+          projects: "empty",
+          education: "empty",
+          certificates: "empty",
+        },
+      })
+      .mockResolvedValueOnce({
+        overall: "partial",
+        sections: {
+          basics: "empty",
+          contact: "empty",
+          summary: "empty",
+          experience: "empty",
+          skills: "empty",
+          projects: "empty",
+          education: "partial",
+          certificates: "empty",
+        },
+      });
+    api.patchProfile.mockResolvedValue({
+      education: [{ school: "University of Washington", degree: "B.S. CS", time: "2023 - 2027" }],
+    });
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+
+    await userEvent.click(await screen.findByRole("button", { name: /edit education/i }));
+    await userEvent.click(screen.getByRole("button", { name: /\+ add another/i }));
+    await userEvent.type(screen.getByLabelText("School"), "University of Washington");
+    await userEvent.type(screen.getByLabelText("Degree"), "B.S. CS");
+    await userEvent.type(screen.getByLabelText("Time period"), "2023 - 2027");
+    await userEvent.click(screen.getByRole("button", { name: /^save$/i }));
+
+    await waitFor(() => expect(api.getCompleteness).toHaveBeenCalledTimes(2));
+    const educationCard = (await screen.findByText("Education")).closest("article");
+
+    expect(educationCard).not.toBeNull();
+    expect(within(educationCard as HTMLElement).getByText("Partial")).toBeInTheDocument();
+  }, 10000);
+
   it("ignores repeated workspace clicks while the first load is pending", async () => {
     const api = apiMock();
     const profileLoad = deferred<Awaited<ReturnType<typeof api.getProfile>>>();
