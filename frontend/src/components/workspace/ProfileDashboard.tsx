@@ -95,9 +95,12 @@ export function ProfileDashboard({ profile, onImprove, onSection }: ProfileDashb
               {section.id === "skills" ? (
                 <div className="profile-card-body">
                   <div className="profile-skill-list">
-                    {profile.skills.items.slice(0, 4).map((skill) => (
-                      <span className="profile-skill-pill" key={skill.name}>
-                        {skill.name}
+                    {profile.skills.items
+                      .filter((skill) => skill.name.trim())
+                      .slice(0, 4)
+                      .map((skill, index) => (
+                      <span className="profile-skill-pill" key={`${skill.name}-${index}`}>
+                        {skill.name.trim()}
                       </span>
                     ))}
                   </div>

@@ -31,11 +31,12 @@ Completed slices:
 - Contact fields persistence
 - Education persistence
 - Experience persistence
+- Projects persistence
 
 Known verification status:
-- Backend unit tests passed after the experience slice.
-- Frontend unit tests, TypeScript, and production build passed after the experience slice.
-- Proxy API E2E passed for experience persistence.
+- Backend unit tests passed after the projects slice.
+- Frontend unit tests, TypeScript, and production build passed after the projects slice.
+- Proxy API E2E passed for projects persistence.
 - Full browser UI E2E is still blocked by local Playwright/browser-install environment issues.
 
 ---
@@ -48,7 +49,7 @@ Known verification status:
 
 ### Slice 1.1: Projects Persistence
 
-**Status:** Next recommended slice.
+**Status:** Complete.
 
 **Scope:**
 - Add backend `Project` model/table/migration.
@@ -63,6 +64,8 @@ Known verification status:
 - Backend tests, frontend tests, TypeScript, build, and proxy API E2E pass.
 
 ### Slice 1.2: Skills Persistence
+
+**Status:** Current slice.
 
 **Scope:**
 - Add backend `Skill` model/table/migration.
@@ -427,11 +430,10 @@ Known verification status:
 
 Create and execute a detailed TDD plan for:
 
-`docs/superpowers/plans/2026-05-07-projects-persistence.md`
+`docs/superpowers/plans/2026-05-07-skills-persistence.md`
 
 Use subagent-driven development with:
 - Backend worker: model, migration, schema, API, backend tests.
 - Frontend worker: types, workspace card/drawer wiring, StageApp tests.
 - Spec/design reviewer: compare against `docs/SPEC.md` and `docs/careerpal`.
 - Quality reviewer: test quality, edge cases, integration leaks, generated artifacts.
-

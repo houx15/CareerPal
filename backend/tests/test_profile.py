@@ -450,6 +450,62 @@ def test_profile_patch_rejects_overlong_project_fields(client):
     assert response.status_code == 422
 
 
+def test_profile_patch_replaces_skills_in_display_order(client):
+    headers = auth_headers(client)
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "skills": [
+                {
+                    "name": "Python",
+                    "category": "Programming",
+                    "proficiency": "advanced",
+                    "comment": "Built FastAPI services",
+                },
+                {
+                    "name": "PostgreSQL",
+                    "category": "Database",
+                    "proficiency": "intermediate",
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["skills"] == [
+        {
+            "name": "Python",
+            "category": "Programming",
+            "proficiency": "advanced",
+            "comment": "Built FastAPI services",
+        },
+        {
+            "name": "PostgreSQL",
+            "category": "Database",
+            "proficiency": "intermediate",
+            "comment": None,
+        },
+    ]
+    assert client.get("/api/profile", headers=headers).json()["skills"] == response.json()["skills"]
+
+
+def test_profile_patch_replaces_skills_with_empty_list(client):
+    headers = auth_headers(client)
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"skills": [{"name": "Python", "category": "Programming", "proficiency": "advanced"}]},
+    )
+
+    response = client.patch("/api/profile", headers=headers, json={"skills": []})
+
+    assert response.status_code == 200
+    assert response.json()["skills"] == []
+    assert client.get("/api/profile", headers=headers).json()["skills"] == []
+
+
 def test_completeness_reflects_name_and_empty_sections(client):
     headers = auth_headers(client)
     client.patch("/api/profile", headers=headers, json={"name": "Alex Chen"})
@@ -578,3 +634,34 @@ def test_completeness_reports_projects_partial_when_items_are_incomplete(client)
 
     assert response.status_code == 200
     assert response.json()["sections"]["projects"] == "partial"
+
+
+def test_completeness_reports_skill_empty_partial_and_complete_states(client):
+    headers = auth_headers(client)
+
+    empty_response = client.get("/api/profile/completeness", headers=headers)
+
+    assert empty_response.status_code == 200
+    assert empty_response.json()["sections"]["skills"] == "empty"
+
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"skills": [{"name": "Python", "category": "", "proficiency": "advanced"}]},
+    )
+    partial_response = client.get("/api/profile/completeness", headers=headers)
+
+    assert partial_response.status_code == 200
+    assert partial_response.json()["sections"]["skills"] == "partial"
+    assert partial_response.json()["overall"] == "partial"
+
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"skills": [{"name": "Python", "category": "Programming", "proficiency": "advanced"}]},
+    )
+    complete_response = client.get("/api/profile/completeness", headers=headers)
+
+    assert complete_response.status_code == 200
+    assert complete_response.json()["sections"]["skills"] == "complete"
+    assert complete_response.json()["overall"] == "partial"

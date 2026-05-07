@@ -1,9 +1,10 @@
 import type { Lang } from "../i18n/copy";
-import type { ExperienceItem, ProjectItem } from "../lib/types";
+import type { ExperienceItem, ProjectItem, SkillItem } from "../lib/types";
 
 export type SectionState = "empty" | "partial" | "complete";
 type DemoExperienceItem = ExperienceItem & { co?: string; note?: string };
 type DemoProjectItem = ProjectItem & { title?: string; note?: string };
+type DemoSkillItem = SkillItem & { years: number; level: number };
 
 export interface DemoProfile {
   name: string;
@@ -17,7 +18,7 @@ export interface DemoProfile {
   basics: { state: SectionState };
   summarySec: { state: SectionState };
   experience: { state: SectionState; items: DemoExperienceItem[] };
-  skills: { state: SectionState; items: Array<{ name: string; years: number; level: number }> };
+  skills: { state: SectionState; items: DemoSkillItem[] };
   projects: { state: SectionState; items: DemoProjectItem[] };
   education: { state: SectionState; items: Array<{ school: string; degree: string; time: string }> };
 }
@@ -51,11 +52,11 @@ export const sampleProfiles: Record<Lang, DemoProfile> = {
     skills: {
       state: "complete",
       items: [
-        { name: "Product strategy", years: 8, level: 0.9 },
-        { name: "Design systems", years: 6, level: 0.85 },
-        { name: "User research", years: 7, level: 0.75 },
-        { name: "Prototyping", years: 8, level: 0.88 },
-        { name: "AI / Prompting", years: 1, level: 0.5 },
+        { name: "Product strategy", category: "Strategy", proficiency: "expert", comment: null, years: 8, level: 0.9 },
+        { name: "Design systems", category: "Design", proficiency: "advanced", comment: null, years: 6, level: 0.85 },
+        { name: "User research", category: "Research", proficiency: "advanced", comment: null, years: 7, level: 0.75 },
+        { name: "Prototyping", category: "Design", proficiency: "expert", comment: null, years: 8, level: 0.88 },
+        { name: "AI / Prompting", category: "AI", proficiency: "intermediate", comment: null, years: 1, level: 0.5 },
       ],
     },
     projects: { state: "empty", items: [] },
@@ -92,11 +93,11 @@ export const sampleProfiles: Record<Lang, DemoProfile> = {
     skills: {
       state: "complete",
       items: [
-        { name: "产品策略", years: 8, level: 0.92 },
-        { name: "设计系统", years: 6, level: 0.85 },
-        { name: "用户研究", years: 7, level: 0.78 },
-        { name: "原型与交互", years: 8, level: 0.88 },
-        { name: "AI / Prompt", years: 1, level: 0.45 },
+        { name: "产品策略", category: "策略", proficiency: "expert", comment: null, years: 8, level: 0.92 },
+        { name: "设计系统", category: "设计", proficiency: "advanced", comment: null, years: 6, level: 0.85 },
+        { name: "用户研究", category: "研究", proficiency: "advanced", comment: null, years: 7, level: 0.78 },
+        { name: "原型与交互", category: "设计", proficiency: "expert", comment: null, years: 8, level: 0.88 },
+        { name: "AI / Prompt", category: "AI", proficiency: "intermediate", comment: null, years: 1, level: 0.45 },
       ],
     },
     projects: { state: "empty", items: [] },

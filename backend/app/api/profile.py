@@ -5,8 +5,16 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.db.session import get_db
-from app.models.user import Education, Experience, Profile, Project, User
-from app.schemas.profile import EducationItem, ExperienceItem, ProfileCompleteness, ProfileResponse, ProfileUpdate, ProjectItem
+from app.models.user import Education, Experience, Profile, Project, Skill, User
+from app.schemas.profile import (
+    EducationItem,
+    ExperienceItem,
+    ProfileCompleteness,
+    ProfileResponse,
+    ProfileUpdate,
+    ProjectItem,
+    SkillItem,
+)
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -53,6 +61,15 @@ def _profile_response(profile: Profile) -> ProfileResponse:
             )
             for item in sorted(profile.project_items, key=lambda item: item.sort_order)
         ],
+        skills=[
+            SkillItem(
+                name=item.name,
+                category=item.category,
+                proficiency=item.proficiency,
+                comment=item.comment,
+            )
+            for item in sorted(profile.skill_items, key=lambda item: item.sort_order)
+        ],
     )
 
 
@@ -81,6 +98,7 @@ def update_profile(
     education = updates.pop("education", None)
     experience = updates.pop("experience", None)
     projects = updates.pop("projects", None)
+    skills = updates.pop("skills", None)
     for field, value in updates.items():
         setattr(profile, field, value)
     if education is not None:
@@ -124,6 +142,18 @@ def update_profile(
             for index, item in enumerate(projects)
         ]
         profile.updated_at = datetime.now(timezone.utc)
+    if skills is not None:
+        profile.skill_items = [
+            Skill(
+                name=item["name"],
+                category=item["category"],
+                proficiency=item["proficiency"],
+                comment=item.get("comment"),
+                sort_order=index,
+            )
+            for index, item in enumerate(skills)
+        ]
+        profile.updated_at = datetime.now(timezone.utc)
     db.add(profile)
     db.commit()
     db.refresh(profile)
@@ -161,11 +191,19 @@ def get_profile_completeness(
         for item in profile.project_items
     )
     projects = "complete" if has_complete_project else "partial" if has_projects else "empty"
+    has_skills = bool(profile.skill_items)
+    has_complete_skill = any(
+        item.name.strip()
+        and item.category.strip()
+        and item.proficiency in {"beginner", "intermediate", "advanced", "expert"}
+        for item in profile.skill_items
+    )
+    skills = "complete" if has_complete_skill else "partial" if has_skills else "empty"
     sections = {
         "basics": basics,
         "summary": "empty",
         "experience": experience,
-        "skills": "empty",
+        "skills": skills,
         "projects": projects,
         "education": education,
     }

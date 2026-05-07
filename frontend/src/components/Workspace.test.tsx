@@ -301,6 +301,105 @@ describe("Workspace", () => {
     expect(screen.queryByLabelText("Project highlights")).not.toBeInTheDocument();
   });
 
+  it("saves edited skills through the profile patch callback with spec fields", async () => {
+    const user = userEvent.setup();
+    const { onPatchProfile } = renderWorkspace({
+      profile: {
+        skills: [
+          {
+            name: "React",
+            category: "Frontend",
+            proficiency: "advanced",
+            comment: null,
+          },
+        ],
+      },
+    });
+    onPatchProfile.mockResolvedValue({
+      skills: [
+        {
+          name: "TypeScript",
+          category: "Programming",
+          proficiency: "expert",
+          comment: "Production React and API work",
+        },
+      ],
+    });
+
+    await user.click(screen.getByRole("button", { name: /edit skills/i }));
+    await user.clear(screen.getByLabelText("Skill name"));
+    await user.type(screen.getByLabelText("Skill name"), "TypeScript");
+    await user.clear(screen.getByLabelText("Category"));
+    await user.type(screen.getByLabelText("Category"), "Programming");
+    await user.selectOptions(screen.getByLabelText("Proficiency"), "expert");
+    await user.type(screen.getByLabelText("Comment"), "  Production React and API work  ");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(onPatchProfile).toHaveBeenCalledWith({
+      skills: [
+        {
+          name: "TypeScript",
+          category: "Programming",
+          proficiency: "expert",
+          comment: "Production React and API work",
+        },
+      ],
+    });
+    expect(await screen.findByText("TypeScript")).toBeInTheDocument();
+  });
+
+  it("renders persisted partial skills inside the Skills card after reload", () => {
+    renderWorkspace({
+      profile: {
+        skills: [
+          {
+            name: "Python",
+            category: "",
+            proficiency: "intermediate",
+            comment: "FastAPI services",
+          },
+        ],
+      },
+      completeness: {
+        sections: {
+          skills: "partial",
+        },
+      },
+    });
+
+    const skillsCard = screen.getByText("Skills").closest("article");
+
+    expect(skillsCard).not.toBeNull();
+    expect(within(skillsCard as HTMLElement).getByText("Partial")).toBeInTheDocument();
+    expect(within(skillsCard as HTMLElement).getByText("Python")).toBeInTheDocument();
+  });
+
+  it("does not render empty skill pills for partial persisted skills without names", () => {
+    renderWorkspace({
+      profile: {
+        skills: [
+          {
+            name: "",
+            category: "Programming",
+            proficiency: "intermediate",
+            comment: "Still clarifying the exact skill name",
+          },
+        ],
+      },
+      completeness: {
+        sections: {
+          skills: "partial",
+        },
+      },
+    });
+
+    const skillsCard = screen.getByText("Skills").closest("article");
+
+    expect(skillsCard).not.toBeNull();
+    expect(within(skillsCard as HTMLElement).getByText("Partial")).toBeInTheDocument();
+    expect((skillsCard as HTMLElement).querySelectorAll(".profile-skill-pill")).toHaveLength(0);
+  });
+
   it("saves edited education through the profile patch callback and updates the card", async () => {
     const user = userEvent.setup();
     const { onPatchProfile } = renderWorkspace();

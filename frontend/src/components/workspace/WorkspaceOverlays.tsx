@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import type { CopyKey } from "../../i18n/copy";
 import { useLang } from "../../i18n/LangProvider";
 import type { DemoProfile } from "../../fixtures/careerpalDemoData";
-import type { EducationItem, ExperienceItem, ProfilePatch, ProjectItem } from "../../lib/types";
+import type { EducationItem, ExperienceItem, ProfilePatch, ProjectItem, SkillItem, SkillProficiency } from "../../lib/types";
 import { Slime } from "../Slime";
 import type { ProfileSectionId } from "./ProfileDashboard";
 
@@ -252,6 +252,27 @@ export function EditDrawer({
               </button>
             </>
           ) : null}
+          {section === "skills" ? (
+            <>
+              {draft.skills.items.map((skill, index) => (
+                <fieldset className="edit-card" key={index}>
+                  <legend className="sr-only">Skill {index + 1}</legend>
+                  <Field label="Skill name" value={skill.name} onChange={(value) => updateSkillItem(index, "name", value)} />
+                  <div className="edit-card-row">
+                    <Field label="Category" value={skill.category} onChange={(value) => updateSkillItem(index, "category", value)} />
+                    <ProficiencyField value={skill.proficiency} onChange={(value) => updateSkillItem(index, "proficiency", value)} />
+                  </div>
+                  <Field label="Comment" value={skill.comment ?? ""} onChange={(value) => updateSkillItem(index, "comment", value)} multiline rows={2} />
+                  <button className="edit-remove" type="button" aria-label={`Remove skill ${index + 1}`} onClick={() => removeSkillItem(index)}>
+                    Remove
+                  </button>
+                </fieldset>
+              ))}
+              <button className="edit-add" type="button" onClick={addSkillItem}>
+                + Add another
+              </button>
+            </>
+          ) : null}
           {section === "projects" ? (
             <>
               {draft.projects.items.map((project, index) => (
@@ -297,7 +318,7 @@ export function EditDrawer({
               </button>
             </>
           ) : null}
-          {section !== "basics" && section !== "summarySec" && section !== "experience" && section !== "education" && section !== "projects" ? (
+          {section !== "basics" && section !== "summarySec" && section !== "experience" && section !== "education" && section !== "skills" && section !== "projects" ? (
             <>
               <Field label="Name" value={draft.name} onChange={(value) => setDraft((current) => ({ ...current, name: value }))} />
               <Field label="Role" value={draft.role} onChange={(value) => setDraft((current) => ({ ...current, role: value }))} />
@@ -350,6 +371,16 @@ export function EditDrawer({
     }));
   }
 
+  function updateSkillItem<K extends keyof SkillItem>(index: number, key: K, value: SkillItem[K]) {
+    setDraft((current) => ({
+      ...current,
+      skills: {
+        ...current.skills,
+        items: current.skills.items.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item)),
+      },
+    }));
+  }
+
   function addExperienceItem() {
     setDraft((current) => ({
       ...current,
@@ -386,6 +417,26 @@ export function EditDrawer({
       projects: {
         ...current.projects,
         items: current.projects.items.filter((_, itemIndex) => itemIndex !== index),
+      },
+    }));
+  }
+
+  function addSkillItem() {
+    setDraft((current) => ({
+      ...current,
+      skills: {
+        ...current.skills,
+        items: [...current.skills.items, { name: "", category: "", proficiency: "intermediate", comment: null, years: 0, level: 0.55 }],
+      },
+    }));
+  }
+
+  function removeSkillItem(index: number) {
+    setDraft((current) => ({
+      ...current,
+      skills: {
+        ...current.skills,
+        items: current.skills.items.filter((_, itemIndex) => itemIndex !== index),
       },
     }));
   }
@@ -438,6 +489,20 @@ function Field({
   );
 }
 
+function ProficiencyField({ value, onChange }: { value: SkillProficiency; onChange: (value: SkillProficiency) => void }) {
+  return (
+    <label className="input-group">
+      <span className="input-label">Proficiency</span>
+      <select className="input" value={value} onChange={(event) => onChange(event.target.value as SkillProficiency)}>
+        <option value="beginner">Beginner</option>
+        <option value="intermediate">Intermediate</option>
+        <option value="advanced">Advanced</option>
+        <option value="expert">Expert</option>
+      </select>
+    </label>
+  );
+}
+
 function profilePatchForSection(section: ProfileSectionId, profile: DemoProfile): ProfilePatch {
   if (section === "summarySec") {
     return { comment: profile.summary };
@@ -474,6 +539,10 @@ function profilePatchForSection(section: ProfileSectionId, profile: DemoProfile)
     return { projects: profile.projects.items.map(normalizeProjectItem) };
   }
 
+  if (section === "skills") {
+    return { skills: profile.skills.items.map(normalizeSkillItem) };
+  }
+
   return {};
 }
 
@@ -485,6 +554,15 @@ function normalizeProjectItem(project: ProjectItem): ProjectItem {
     achievements: project.achievements.map((item) => item.trim()).filter(Boolean),
     link: project.link?.trim() || null,
     comment: project.comment?.trim() || null,
+  };
+}
+
+function normalizeSkillItem(skill: SkillItem): SkillItem {
+  return {
+    name: skill.name.trim(),
+    category: skill.category.trim(),
+    proficiency: skill.proficiency,
+    comment: skill.comment?.trim() || null,
   };
 }
 

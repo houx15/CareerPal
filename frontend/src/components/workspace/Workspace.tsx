@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { sampleProfiles, type DemoProfile } from "../../fixtures/careerpalDemoData";
 import type { CopyKey } from "../../i18n/copy";
 import { LangToggle, useLang } from "../../i18n/LangProvider";
-import type { CompletenessState, ProfilePatch, ProjectItem } from "../../lib/types";
+import type { CompletenessState, ProfilePatch, ProjectItem, SkillItem } from "../../lib/types";
 import { Slime } from "../Slime";
 import { ProfileDashboard, type ProfileSectionId } from "./ProfileDashboard";
 import { EditDrawer, ImproveChatOverlay } from "./WorkspaceOverlays";
@@ -52,6 +52,8 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
       const experience = savedProfile.experience ?? persistedProfile?.experience;
       const projects = savedProfile.projects ?? persistedProfile?.projects;
       const projectItems = projects?.map(normalizeProjectForWorkspace);
+      const skills = savedProfile.skills ?? persistedProfile?.skills;
+      const skillItems = skills?.map(normalizeSkillForWorkspace);
 
       return {
         ...sampleProfiles[lang],
@@ -84,6 +86,13 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
                 state: savedProfile.projects !== undefined ? projectSectionState(projectItems) : completeness?.sections.projects ?? projectSectionState(projectItems),
                 items: projectItems,
               },
+        skills:
+          skillItems === undefined
+            ? sampleProfiles[lang].skills
+            : {
+                state: savedProfile.skills !== undefined ? skillSectionState(skillItems) : completeness?.sections.skills ?? skillSectionState(skillItems),
+                items: skillItems,
+              },
       };
     },
     [
@@ -97,7 +106,9 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
       persistedProfile?.name,
       persistedProfile?.phone,
       persistedProfile?.projects,
+      persistedProfile?.skills,
       completeness?.sections.projects,
+      completeness?.sections.skills,
       savedProfile.comment,
       savedProfile.contact_email,
       savedProfile.education,
@@ -107,6 +118,7 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
       savedProfile.name,
       savedProfile.phone,
       savedProfile.projects,
+      savedProfile.skills,
       user.email,
       user.handle,
       user.initials,
@@ -188,6 +200,20 @@ function normalizeProjectForWorkspace(project: ProjectItem): ProjectItem {
   };
 }
 
+function normalizeSkillForWorkspace(skill: SkillItem): DemoProfile["skills"]["items"][number] {
+  const proficiency = isSkillProficiency(skill.proficiency) ? skill.proficiency : "intermediate";
+
+  return {
+    ...skill,
+    name: skill.name || "",
+    category: skill.category || "",
+    proficiency,
+    comment: typeof skill.comment === "string" ? skill.comment : null,
+    years: typeof skill.years === "number" ? skill.years : 0,
+    level: typeof skill.level === "number" ? skill.level : levelForProficiency(proficiency),
+  };
+}
+
 function projectSectionState(projects: ProjectItem[]): CompletenessState {
   if (projects.length === 0) {
     return "empty";
@@ -202,4 +228,23 @@ function projectSectionState(projects: ProjectItem[]): CompletenessState {
   );
 
   return hasCompleteProject ? "complete" : "partial";
+}
+
+function skillSectionState(skills: SkillItem[]): CompletenessState {
+  if (skills.length === 0) {
+    return "empty";
+  }
+
+  return skills.some((skill) => skill.name.trim() && skill.category.trim() && isSkillProficiency(skill.proficiency)) ? "complete" : "partial";
+}
+
+function isSkillProficiency(value: unknown): value is SkillItem["proficiency"] {
+  return value === "beginner" || value === "intermediate" || value === "advanced" || value === "expert";
+}
+
+function levelForProficiency(proficiency: SkillItem["proficiency"]): number {
+  if (proficiency === "expert") return 0.9;
+  if (proficiency === "advanced") return 0.75;
+  if (proficiency === "intermediate") return 0.55;
+  return 0.3;
 }

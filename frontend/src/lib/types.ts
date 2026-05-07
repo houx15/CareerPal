@@ -47,6 +47,17 @@ export interface ProjectItem extends Record<string, unknown> {
   completeness?: "sparse" | "partial" | "complete";
 }
 
+export type SkillProficiency = "beginner" | "intermediate" | "advanced" | "expert";
+
+export interface SkillItem extends Record<string, unknown> {
+  name: string;
+  category: string;
+  proficiency: SkillProficiency;
+  comment?: string | null;
+  years?: number;
+  level?: number;
+}
+
 export interface Profile {
   updated_at: string;
   name: string | null;
@@ -59,14 +70,24 @@ export interface Profile {
   education: EducationItem[];
   experience: ExperienceItem[];
   projects: ProjectItem[];
-  skills: Record<string, unknown>[];
+  skills: SkillItem[];
   certificates: Record<string, unknown>[];
 }
 
 export type ProfilePatch = Partial<
   Pick<
     Profile,
-    "name" | "phone" | "contact_email" | "location" | "headline" | "target_direction" | "comment" | "education" | "experience" | "projects"
+    | "name"
+    | "phone"
+    | "contact_email"
+    | "location"
+    | "headline"
+    | "target_direction"
+    | "comment"
+    | "education"
+    | "experience"
+    | "projects"
+    | "skills"
   >
 >;
 

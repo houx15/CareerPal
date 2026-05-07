@@ -42,6 +42,20 @@ class ProjectItemUpdate(ProjectItem):
     model_config = ConfigDict(extra="forbid")
 
 
+SkillProficiency = Literal["beginner", "intermediate", "advanced", "expert"]
+
+
+class SkillItem(BaseModel):
+    name: str = Field(max_length=255)
+    category: str = Field(max_length=255)
+    proficiency: SkillProficiency
+    comment: str | None = None
+
+
+class SkillItemUpdate(SkillItem):
+    model_config = ConfigDict(extra="forbid")
+
+
 class ProfileResponse(BaseModel):
     updated_at: datetime
     name: str | None = None
@@ -54,7 +68,7 @@ class ProfileResponse(BaseModel):
     education: list[EducationItem] = Field(default_factory=list)
     experience: list[ExperienceItem] = Field(default_factory=list)
     projects: list[ProjectItem] = Field(default_factory=list)
-    skills: list[dict] = Field(default_factory=list)
+    skills: list[SkillItem] = Field(default_factory=list)
     certificates: list[dict] = Field(default_factory=list)
 
 
@@ -71,6 +85,7 @@ class ProfileUpdate(BaseModel):
     education: list[EducationItemUpdate] | None = None
     experience: list[ExperienceItemUpdate] | None = None
     projects: list[ProjectItemUpdate] | None = None
+    skills: list[SkillItemUpdate] | None = None
 
 
 CompletenessState = Literal["empty", "partial", "complete"]

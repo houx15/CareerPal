@@ -73,6 +73,11 @@ class Profile(Base):
         cascade="all, delete-orphan",
         order_by="Project.sort_order",
     )
+    skill_items: Mapped[list["Skill"]] = relationship(
+        back_populates="profile",
+        cascade="all, delete-orphan",
+        order_by="Skill.sort_order",
+    )
 
 
 class Education(Base):
@@ -120,3 +125,17 @@ class Project(Base):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
 
     profile: Mapped[Profile] = relationship(back_populates="project_items")
+
+
+class Skill(Base):
+    __tablename__ = "skills"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    profile_id: Mapped[str] = mapped_column(ForeignKey("profiles.id"), index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    category: Mapped[str] = mapped_column(String(255), nullable=False)
+    proficiency: Mapped[str] = mapped_column(String(20), nullable=False)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    profile: Mapped[Profile] = relationship(back_populates="skill_items")
