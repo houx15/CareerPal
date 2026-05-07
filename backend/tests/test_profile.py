@@ -309,6 +309,147 @@ def test_profile_patch_rejects_overlong_experience_fields(client):
     assert response.status_code == 422
 
 
+def test_profile_patch_replaces_projects_in_display_order(client):
+    headers = auth_headers(client)
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "projects": [
+                {
+                    "name": "CareerPal",
+                    "description": "Built a career companion workspace.",
+                    "tech_stack": ["Next.js", "FastAPI"],
+                    "achievements": ["Persisted profile project data end to end"],
+                    "link": "https://example.com/careerpal",
+                    "comment": "Strong full-stack project",
+                },
+                {
+                    "name": "Campus Planner",
+                    "description": "Created a student schedule planner.",
+                    "tech_stack": ["React"],
+                    "achievements": [],
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["projects"] == [
+        {
+            "name": "CareerPal",
+            "description": "Built a career companion workspace.",
+            "tech_stack": ["Next.js", "FastAPI"],
+            "achievements": ["Persisted profile project data end to end"],
+            "link": "https://example.com/careerpal",
+            "comment": "Strong full-stack project",
+            "completeness": "complete",
+        },
+        {
+            "name": "Campus Planner",
+            "description": "Created a student schedule planner.",
+            "tech_stack": ["React"],
+            "achievements": [],
+            "link": None,
+            "comment": None,
+            "completeness": "partial",
+        },
+    ]
+    assert client.get("/api/profile", headers=headers).json()["projects"] == response.json()["projects"]
+
+
+def test_profile_patch_replacing_projects_with_shorter_list_removes_old_items(client):
+    headers = auth_headers(client)
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "projects": [
+                {"name": "First", "description": "One", "tech_stack": ["React"], "achievements": []},
+                {"name": "Second", "description": "Two", "tech_stack": ["FastAPI"], "achievements": []},
+            ]
+        },
+    )
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"projects": [{"name": "Second", "description": "Two", "tech_stack": ["FastAPI"], "achievements": []}]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["projects"] == [
+        {
+            "name": "Second",
+            "description": "Two",
+            "tech_stack": ["FastAPI"],
+            "achievements": [],
+            "link": None,
+            "comment": None,
+            "completeness": "partial",
+        }
+    ]
+
+
+def test_profile_patch_defaults_optional_project_fields(client):
+    headers = auth_headers(client)
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"projects": [{"name": "Campus Planner", "description": "Built scheduling views."}]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["projects"] == [
+        {
+            "name": "Campus Planner",
+            "description": "Built scheduling views.",
+            "tech_stack": [],
+            "achievements": [],
+            "link": None,
+            "comment": None,
+            "completeness": "partial",
+        }
+    ]
+
+
+def test_profile_patch_accepts_project_completeness_when_provided(client):
+    headers = auth_headers(client)
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "projects": [
+                {
+                    "name": "CareerPal",
+                    "description": "Built profile persistence.",
+                    "tech_stack": ["Next.js"],
+                    "achievements": ["Saved projects across reloads"],
+                    "completeness": "complete",
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["projects"][0]["completeness"] == "complete"
+
+
+def test_profile_patch_rejects_overlong_project_fields(client):
+    headers = auth_headers(client)
+
+    response = client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"projects": [{"name": "P" * 256, "description": "Built scheduling views."}]},
+    )
+
+    assert response.status_code == 422
+
+
 def test_completeness_reflects_name_and_empty_sections(client):
     headers = auth_headers(client)
     client.patch("/api/profile", headers=headers, json={"name": "Alex Chen"})
@@ -400,3 +541,40 @@ def test_completeness_reports_experience_partial_when_items_are_incomplete(clien
 
     assert response.status_code == 200
     assert response.json()["sections"]["experience"] == "partial"
+
+
+def test_completeness_reports_projects_complete_when_required_fields_exist(client):
+    headers = auth_headers(client)
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "projects": [
+                {
+                    "name": "CareerPal",
+                    "description": "Built profile persistence.",
+                    "tech_stack": ["Next.js"],
+                    "achievements": ["Saved projects across reloads"],
+                }
+            ]
+        },
+    )
+
+    response = client.get("/api/profile/completeness", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["sections"]["projects"] == "complete"
+
+
+def test_completeness_reports_projects_partial_when_items_are_incomplete(client):
+    headers = auth_headers(client)
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={"projects": [{"name": "CareerPal", "description": "Built profile persistence."}]},
+    )
+
+    response = client.get("/api/profile/completeness", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["sections"]["projects"] == "partial"

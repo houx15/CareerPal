@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.db.session import get_db
-from app.models.user import Education, Experience, Profile, User
-from app.schemas.profile import EducationItem, ExperienceItem, ProfileCompleteness, ProfileResponse, ProfileUpdate
+from app.models.user import Education, Experience, Profile, Project, User
+from app.schemas.profile import EducationItem, ExperienceItem, ProfileCompleteness, ProfileResponse, ProfileUpdate, ProjectItem
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -41,6 +41,18 @@ def _profile_response(profile: Profile) -> ProfileResponse:
             )
             for item in sorted(profile.experience_items, key=lambda item: item.sort_order)
         ],
+        projects=[
+            ProjectItem(
+                name=item.name,
+                description=item.description,
+                tech_stack=item.tech_stack,
+                achievements=item.achievements,
+                link=item.link,
+                comment=item.comment,
+                completeness=item.completeness,
+            )
+            for item in sorted(profile.project_items, key=lambda item: item.sort_order)
+        ],
     )
 
 
@@ -68,6 +80,7 @@ def update_profile(
     updates = payload.model_dump(exclude_unset=True)
     education = updates.pop("education", None)
     experience = updates.pop("experience", None)
+    projects = updates.pop("projects", None)
     for field, value in updates.items():
         setattr(profile, field, value)
     if education is not None:
@@ -94,6 +107,21 @@ def update_profile(
                 sort_order=index,
             )
             for index, item in enumerate(experience)
+        ]
+        profile.updated_at = datetime.now(timezone.utc)
+    if projects is not None:
+        profile.project_items = [
+            Project(
+                name=item["name"],
+                description=item.get("description", ""),
+                tech_stack=item.get("tech_stack", []),
+                achievements=item.get("achievements", []),
+                link=item.get("link"),
+                comment=item.get("comment"),
+                completeness=item.get("completeness") or _project_item_completeness(item),
+                sort_order=index,
+            )
+            for index, item in enumerate(projects)
         ]
         profile.updated_at = datetime.now(timezone.utc)
     db.add(profile)
@@ -124,13 +152,34 @@ def get_profile_completeness(
         for item in profile.experience_items
     )
     experience = "complete" if has_complete_experience else "partial" if has_experience else "empty"
+    has_projects = bool(profile.project_items)
+    has_complete_project = any(
+        item.name.strip()
+        and item.description.strip()
+        and any(tech.strip() for tech in item.tech_stack)
+        and any(achievement.strip() for achievement in item.achievements)
+        for item in profile.project_items
+    )
+    projects = "complete" if has_complete_project else "partial" if has_projects else "empty"
     sections = {
         "basics": basics,
         "summary": "empty",
         "experience": experience,
         "skills": "empty",
-        "projects": "empty",
+        "projects": projects,
         "education": education,
     }
     overall = "partial" if any(state != "empty" for state in sections.values()) else "empty"
     return ProfileCompleteness(overall=overall, sections=sections)
+
+
+def _project_item_completeness(item: dict) -> str:
+    has_name = bool(item["name"].strip())
+    has_description = bool(item.get("description", "").strip())
+    has_tech = any(tech.strip() for tech in item.get("tech_stack", []))
+    has_achievement = any(achievement.strip() for achievement in item.get("achievements", []))
+    if has_name and has_description and has_tech and has_achievement:
+        return "complete"
+    if any([has_name, has_description, has_tech, has_achievement]):
+        return "partial"
+    return "sparse"

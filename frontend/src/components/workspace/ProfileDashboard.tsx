@@ -67,7 +67,7 @@ export function ProfileDashboard({ profile, onImprove, onSection }: ProfileDashb
                 <button
                   className="profile-card-edit"
                   type="button"
-                  aria-label={t("profile_edit")}
+                  aria-label={`${t("profile_edit")} ${t(section.label)}`}
                   onClick={(event) => {
                     event.stopPropagation();
                     onSection(section.id);
@@ -101,6 +101,16 @@ export function ProfileDashboard({ profile, onImprove, onSection }: ProfileDashb
                       </span>
                     ))}
                   </div>
+                </div>
+              ) : null}
+              {section.id === "projects" ? (
+                <div className="profile-card-body">
+                  {profile.projects.items.slice(0, 2).map((project, index) => (
+                    <div className="profile-card-row" key={`${project.name}-${project.description}-${index}`}>
+                      <div className="profile-card-row-title">{project.name}</div>
+                      <div className="profile-card-row-note">{project.description}</div>
+                    </div>
+                  ))}
                 </div>
               ) : null}
               {section.id === "education" ? (

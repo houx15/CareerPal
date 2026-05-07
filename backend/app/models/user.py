@@ -68,6 +68,11 @@ class Profile(Base):
         cascade="all, delete-orphan",
         order_by="Experience.sort_order",
     )
+    project_items: Mapped[list["Project"]] = relationship(
+        back_populates="profile",
+        cascade="all, delete-orphan",
+        order_by="Project.sort_order",
+    )
 
 
 class Education(Base):
@@ -98,3 +103,20 @@ class Experience(Base):
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
 
     profile: Mapped[Profile] = relationship(back_populates="experience_items")
+
+
+class Project(Base):
+    __tablename__ = "projects"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    profile_id: Mapped[str] = mapped_column(ForeignKey("profiles.id"), index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    tech_stack: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    achievements: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    link: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    completeness: Mapped[str] = mapped_column(String(20), nullable=False, default="partial")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    profile: Mapped[Profile] = relationship(back_populates="project_items")

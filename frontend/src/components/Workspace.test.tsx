@@ -1,16 +1,18 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { LangProvider } from "../i18n/LangProvider";
 import { Workspace } from "./workspace/Workspace";
 
-function renderWorkspace() {
+function renderWorkspace({ profile = {}, completeness }: { profile?: Parameters<typeof Workspace>[0]["profile"]; completeness?: Parameters<typeof Workspace>[0]["completeness"] } = {}) {
   const onPatchProfile = vi.fn();
   render(
     <LangProvider>
       <Workspace
         user={{ name: "Alex Chen", initials: "AC", email: "alex@example.com", handle: "alex" }}
         onLogout={vi.fn()}
+        profile={profile}
+        completeness={completeness}
         onPatchProfile={onPatchProfile}
       />
     </LangProvider>,
@@ -44,7 +46,7 @@ describe("Workspace", () => {
     await userEvent.click(screen.getByRole("button", { name: /improve via chat/i }));
 
     expect(screen.getAllByText(/which part should we work on/i).length).toBeGreaterThan(0);
-    await userEvent.click(screen.getByRole("button", { name: /skills/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^skills$/i }));
     expect(screen.getByText(/let's polish your skills/i)).toBeInTheDocument();
   });
 
@@ -177,6 +179,126 @@ describe("Workspace", () => {
     await user.click(screen.getByRole("button", { name: /^save$/i }));
 
     expect(onPatchProfile).toHaveBeenCalledWith({ experience: [] });
+  });
+
+  it("saves edited projects through the profile patch callback", async () => {
+    const user = userEvent.setup();
+    const { onPatchProfile } = renderWorkspace({
+      profile: {
+        projects: [
+          {
+            name: "Portfolio",
+            description: "Built a static portfolio.",
+            tech_stack: ["React"],
+            achievements: [],
+            link: null,
+            comment: null,
+          },
+        ],
+      },
+    });
+    onPatchProfile.mockResolvedValue({
+      projects: [
+        {
+          name: "CareerPal",
+          description: "Built profile persistence.",
+          tech_stack: ["Next.js", "FastAPI"],
+          achievements: ["Saved project data"],
+          link: "https://example.com/careerpal",
+          comment: null,
+        },
+      ],
+    });
+
+    await user.click(screen.getByRole("button", { name: /edit projects/i }));
+    await user.clear(screen.getByLabelText("Project name"));
+    await user.type(screen.getByLabelText("Project name"), "CareerPal");
+    await user.clear(screen.getByLabelText("Link"));
+    await user.type(screen.getByLabelText("Link"), "https://example.com/careerpal");
+    await user.clear(screen.getByLabelText("Description"));
+    await user.type(screen.getByLabelText("Description"), "Built profile persistence.");
+    await user.clear(screen.getByLabelText("Tech stack"));
+    fireEvent.change(screen.getByLabelText("Tech stack"), { target: { value: "Next.js\nFastAPI" } });
+    await user.clear(screen.getByLabelText("Achievements"));
+    await user.type(screen.getByLabelText("Achievements"), "Saved project data");
+    await user.type(screen.getByLabelText("Comment"), "Strong full-stack project");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    expect(onPatchProfile).toHaveBeenCalledWith({
+      projects: [
+        {
+          name: "CareerPal",
+          description: "Built profile persistence.",
+          tech_stack: ["Next.js", "FastAPI"],
+          achievements: ["Saved project data"],
+          link: "https://example.com/careerpal",
+          comment: "Strong full-stack project",
+        },
+      ],
+    });
+  });
+
+  it("recomputes project status after saving when fetched completeness is stale", async () => {
+    const user = userEvent.setup();
+    const { onPatchProfile } = renderWorkspace({
+      profile: { projects: [] },
+      completeness: {
+        sections: {
+          projects: "empty",
+        },
+      },
+    });
+    onPatchProfile.mockResolvedValue({
+      projects: [
+        {
+          name: "CareerPal",
+          description: "Built profile persistence.",
+          tech_stack: ["Next.js"],
+          achievements: ["Saved project data"],
+          link: null,
+          comment: null,
+        },
+      ],
+    });
+
+    await user.click(screen.getByRole("button", { name: /edit projects/i }));
+    await user.click(screen.getByRole("button", { name: /\+ add another/i }));
+    await user.type(screen.getByLabelText("Project name"), "CareerPal");
+    await user.type(screen.getByLabelText("Description"), "Built profile persistence.");
+    fireEvent.change(screen.getByLabelText("Tech stack"), { target: { value: "Next.js" } });
+    await user.type(screen.getByLabelText("Achievements"), "Saved project data");
+    await user.click(screen.getByRole("button", { name: /^save$/i }));
+
+    const projectsCard = (await screen.findByText("Projects")).closest("article");
+
+    expect(projectsCard).not.toBeNull();
+    expect(within(projectsCard as HTMLElement).getByText("Complete")).toBeInTheDocument();
+  });
+
+  it("renders persisted projects inside the Projects card with partial status when incomplete", () => {
+    renderWorkspace({
+      profile: {
+        projects: [
+          {
+            name: "CareerPal",
+            description: "Built profile persistence.",
+            tech_stack: [],
+            achievements: [],
+            link: null,
+            comment: null,
+            completeness: "partial",
+          },
+        ],
+      },
+    });
+
+    const projectsCard = screen.getByText("Projects").closest("article");
+
+    expect(projectsCard).not.toBeNull();
+    expect(within(projectsCard as HTMLElement).getByText("Partial")).toBeInTheDocument();
+    expect(within(projectsCard as HTMLElement).getByText("CareerPal")).toBeInTheDocument();
+    expect(within(projectsCard as HTMLElement).getByText("Built profile persistence.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Project highlights")).not.toBeInTheDocument();
   });
 
   it("saves edited education through the profile patch callback and updates the card", async () => {

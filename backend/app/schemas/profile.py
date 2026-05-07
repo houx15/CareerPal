@@ -28,6 +28,20 @@ class ExperienceItemUpdate(ExperienceItem):
     model_config = ConfigDict(extra="forbid")
 
 
+class ProjectItem(BaseModel):
+    name: str = Field(max_length=255)
+    description: str = ""
+    tech_stack: list[str] = Field(default_factory=list)
+    achievements: list[str] = Field(default_factory=list)
+    link: str | None = Field(default=None, max_length=500)
+    comment: str | None = None
+    completeness: Literal["sparse", "partial", "complete"] = "partial"
+
+
+class ProjectItemUpdate(ProjectItem):
+    model_config = ConfigDict(extra="forbid")
+
+
 class ProfileResponse(BaseModel):
     updated_at: datetime
     name: str | None = None
@@ -39,7 +53,7 @@ class ProfileResponse(BaseModel):
     comment: str | None = None
     education: list[EducationItem] = Field(default_factory=list)
     experience: list[ExperienceItem] = Field(default_factory=list)
-    projects: list[dict] = Field(default_factory=list)
+    projects: list[ProjectItem] = Field(default_factory=list)
     skills: list[dict] = Field(default_factory=list)
     certificates: list[dict] = Field(default_factory=list)
 
@@ -56,6 +70,7 @@ class ProfileUpdate(BaseModel):
     comment: str | None = None
     education: list[EducationItemUpdate] | None = None
     experience: list[ExperienceItemUpdate] | None = None
+    projects: list[ProjectItemUpdate] | None = None
 
 
 CompletenessState = Literal["empty", "partial", "complete"]

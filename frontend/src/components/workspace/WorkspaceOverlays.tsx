@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import type { CopyKey } from "../../i18n/copy";
 import { useLang } from "../../i18n/LangProvider";
 import type { DemoProfile } from "../../fixtures/careerpalDemoData";
-import type { EducationItem, ExperienceItem, ProfilePatch } from "../../lib/types";
+import type { EducationItem, ExperienceItem, ProfilePatch, ProjectItem } from "../../lib/types";
 import { Slime } from "../Slime";
 import type { ProfileSectionId } from "./ProfileDashboard";
 
@@ -252,7 +252,52 @@ export function EditDrawer({
               </button>
             </>
           ) : null}
-          {section !== "basics" && section !== "summarySec" && section !== "experience" && section !== "education" ? (
+          {section === "projects" ? (
+            <>
+              {draft.projects.items.map((project, index) => (
+                <fieldset className="edit-card" key={index}>
+                  <legend className="sr-only">Project {index + 1}</legend>
+                  <Field label="Project name" value={project.name} onChange={(value) => updateProjectItem(index, "name", value)} />
+                  <Field label="Link" value={project.link ?? ""} onChange={(value) => updateProjectItem(index, "link", value)} placeholder="https://example.com" />
+                  <Field
+                    label="Description"
+                    value={project.description}
+                    onChange={(value) => updateProjectItem(index, "description", value)}
+                    multiline
+                    rows={3}
+                  />
+                  <Field
+                    label="Tech stack"
+                    value={project.tech_stack.join("\n")}
+                    onChange={(value) => updateProjectItem(index, "tech_stack", splitDraftLines(value))}
+                    multiline
+                    rows={3}
+                  />
+                  <Field
+                    label="Achievements"
+                    value={project.achievements.join("\n")}
+                    onChange={(value) => updateProjectItem(index, "achievements", splitDraftLines(value))}
+                    multiline
+                    rows={3}
+                  />
+                  <Field
+                    label="Comment"
+                    value={project.comment ?? ""}
+                    onChange={(value) => updateProjectItem(index, "comment", value)}
+                    multiline
+                    rows={2}
+                  />
+                  <button className="edit-remove" type="button" aria-label={`Remove project ${index + 1}`} onClick={() => removeProjectItem(index)}>
+                    Remove
+                  </button>
+                </fieldset>
+              ))}
+              <button className="edit-add" type="button" onClick={addProjectItem}>
+                + Add another
+              </button>
+            </>
+          ) : null}
+          {section !== "basics" && section !== "summarySec" && section !== "experience" && section !== "education" && section !== "projects" ? (
             <>
               <Field label="Name" value={draft.name} onChange={(value) => setDraft((current) => ({ ...current, name: value }))} />
               <Field label="Role" value={draft.role} onChange={(value) => setDraft((current) => ({ ...current, role: value }))} />
@@ -295,6 +340,16 @@ export function EditDrawer({
     }));
   }
 
+  function updateProjectItem<K extends keyof ProjectItem>(index: number, key: K, value: ProjectItem[K]) {
+    setDraft((current) => ({
+      ...current,
+      projects: {
+        ...current.projects,
+        items: current.projects.items.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item)),
+      },
+    }));
+  }
+
   function addExperienceItem() {
     setDraft((current) => ({
       ...current,
@@ -311,6 +366,26 @@ export function EditDrawer({
       experience: {
         ...current.experience,
         items: current.experience.items.filter((_, itemIndex) => itemIndex !== index),
+      },
+    }));
+  }
+
+  function addProjectItem() {
+    setDraft((current) => ({
+      ...current,
+      projects: {
+        ...current.projects,
+        items: [...current.projects.items, { name: "", description: "", tech_stack: [], achievements: [], link: null, comment: null }],
+      },
+    }));
+  }
+
+  function removeProjectItem(index: number) {
+    setDraft((current) => ({
+      ...current,
+      projects: {
+        ...current.projects,
+        items: current.projects.items.filter((_, itemIndex) => itemIndex !== index),
       },
     }));
   }
@@ -395,7 +470,22 @@ function profilePatchForSection(section: ProfileSectionId, profile: DemoProfile)
     };
   }
 
+  if (section === "projects") {
+    return { projects: profile.projects.items.map(normalizeProjectItem) };
+  }
+
   return {};
+}
+
+function normalizeProjectItem(project: ProjectItem): ProjectItem {
+  return {
+    name: project.name.trim(),
+    description: project.description.trim(),
+    tech_stack: project.tech_stack.map((item) => item.trim()).filter(Boolean),
+    achievements: project.achievements.map((item) => item.trim()).filter(Boolean),
+    link: project.link?.trim() || null,
+    comment: project.comment?.trim() || null,
+  };
 }
 
 function splitDraftLines(value: string): string[] {

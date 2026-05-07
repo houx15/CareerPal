@@ -37,6 +37,16 @@ export interface ExperienceItem extends Record<string, unknown> {
   comment?: string | null;
 }
 
+export interface ProjectItem extends Record<string, unknown> {
+  name: string;
+  description: string;
+  tech_stack: string[];
+  achievements: string[];
+  link?: string | null;
+  comment?: string | null;
+  completeness?: "sparse" | "partial" | "complete";
+}
+
 export interface Profile {
   updated_at: string;
   name: string | null;
@@ -48,13 +58,16 @@ export interface Profile {
   comment: string | null;
   education: EducationItem[];
   experience: ExperienceItem[];
-  projects: Record<string, unknown>[];
+  projects: ProjectItem[];
   skills: Record<string, unknown>[];
   certificates: Record<string, unknown>[];
 }
 
 export type ProfilePatch = Partial<
-  Pick<Profile, "name" | "phone" | "contact_email" | "location" | "headline" | "target_direction" | "comment" | "education" | "experience">
+  Pick<
+    Profile,
+    "name" | "phone" | "contact_email" | "location" | "headline" | "target_direction" | "comment" | "education" | "experience" | "projects"
+  >
 >;
 
 export type CompletenessState = "empty" | "partial" | "complete";

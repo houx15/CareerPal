@@ -1,8 +1,9 @@
 import type { Lang } from "../i18n/copy";
-import type { ExperienceItem } from "../lib/types";
+import type { ExperienceItem, ProjectItem } from "../lib/types";
 
 export type SectionState = "empty" | "partial" | "complete";
 type DemoExperienceItem = ExperienceItem & { co?: string; note?: string };
+type DemoProjectItem = ProjectItem & { title?: string; note?: string };
 
 export interface DemoProfile {
   name: string;
@@ -17,7 +18,7 @@ export interface DemoProfile {
   summarySec: { state: SectionState };
   experience: { state: SectionState; items: DemoExperienceItem[] };
   skills: { state: SectionState; items: Array<{ name: string; years: number; level: number }> };
-  projects: { state: SectionState; items: Array<{ title?: string; note?: string }> };
+  projects: { state: SectionState; items: DemoProjectItem[] };
   education: { state: SectionState; items: Array<{ school: string; degree: string; time: string }> };
 }
 

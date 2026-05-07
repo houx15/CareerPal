@@ -1,4 +1,4 @@
-import type { CompletenessState, EducationItem, ExperienceItem } from "../lib/types";
+import type { CompletenessState, EducationItem, ExperienceItem, ProjectItem } from "../lib/types";
 import type { ProfilePatch } from "../lib/types";
 import { Workspace as PrototypeWorkspace } from "./workspace/Workspace";
 
@@ -12,7 +12,7 @@ export interface WorkspaceProfile {
   comment: string | null;
   education: EducationItem[];
   experience: ExperienceItem[];
-  projects: Record<string, unknown>[];
+  projects: ProjectItem[];
   skills: Record<string, unknown>[];
   certificates: Record<string, unknown>[];
 }
@@ -29,7 +29,7 @@ interface WorkspaceProps {
   onPatchProfile: (payload: ProfilePatch) => Promise<Partial<WorkspaceProfile>>;
 }
 
-export function Workspace({ profile, onLogout, onPatchProfile }: WorkspaceProps) {
+export function Workspace({ profile, completeness, onLogout, onPatchProfile }: WorkspaceProps) {
   const name = profile.name || "CareerPal user";
 
   return (
@@ -50,7 +50,9 @@ export function Workspace({ profile, onLogout, onPatchProfile }: WorkspaceProps)
         comment: profile.comment,
         education: profile.education,
         experience: profile.experience,
+        projects: profile.projects,
       }}
+      completeness={completeness}
       onLogout={onLogout}
       onPatchProfile={async (payload) => {
         const saved = await onPatchProfile(payload);
@@ -64,6 +66,7 @@ export function Workspace({ profile, onLogout, onPatchProfile }: WorkspaceProps)
           comment: saved.comment ?? undefined,
           education: saved.education,
           experience: saved.experience,
+          projects: saved.projects,
         };
       }}
     />

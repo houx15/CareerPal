@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { sampleProfiles, type DemoProfile } from "../../fixtures/careerpalDemoData";
 import type { CopyKey } from "../../i18n/copy";
 import { LangToggle, useLang } from "../../i18n/LangProvider";
-import type { ProfilePatch } from "../../lib/types";
+import type { CompletenessState, ProfilePatch, ProjectItem } from "../../lib/types";
 import { Slime } from "../Slime";
 import { ProfileDashboard, type ProfileSectionId } from "./ProfileDashboard";
 import { EditDrawer, ImproveChatOverlay } from "./WorkspaceOverlays";
@@ -25,6 +25,7 @@ interface WorkspaceProps {
   user: WorkspaceUser;
   onLogout: () => void;
   profile?: ProfilePatch;
+  completeness?: { sections: Record<string, CompletenessState> };
   onPatchProfile?: (payload: ProfilePatch) => Promise<ProfilePatch>;
 }
 
@@ -38,7 +39,7 @@ const NAV: Array<{ id: Tab; label: CopyKey }> = [
   { id: "activity", label: "nav_activity" },
 ];
 
-export function Workspace({ user, onLogout, profile: persistedProfile, onPatchProfile }: WorkspaceProps) {
+export function Workspace({ user, onLogout, profile: persistedProfile, completeness, onPatchProfile }: WorkspaceProps) {
   const { t, lang } = useLang();
   const [tab, setTab] = useState<Tab>("profile");
   const [improveSection, setImproveSection] = useState<"any" | "basics" | "summary" | "experience" | "skills" | "projects" | "education" | null>(null);
@@ -49,6 +50,8 @@ export function Workspace({ user, onLogout, profile: persistedProfile, onPatchPr
     () => {
       const education = savedProfile.education ?? persistedProfile?.education;
       const experience = savedProfile.experience ?? persistedProfile?.experience;
+      const projects = savedProfile.projects ?? persistedProfile?.projects;
+      const projectItems = projects?.map(normalizeProjectForWorkspace);
 
       return {
         ...sampleProfiles[lang],
@@ -74,6 +77,13 @@ export function Workspace({ user, onLogout, profile: persistedProfile, onPatchPr
                 state: experience.length > 0 ? "complete" : "empty",
                 items: experience,
               },
+        projects:
+          projectItems === undefined
+            ? sampleProfiles[lang].projects
+            : {
+                state: savedProfile.projects !== undefined ? projectSectionState(projectItems) : completeness?.sections.projects ?? projectSectionState(projectItems),
+                items: projectItems,
+              },
       };
     },
     [
@@ -86,6 +96,8 @@ export function Workspace({ user, onLogout, profile: persistedProfile, onPatchPr
       persistedProfile?.location,
       persistedProfile?.name,
       persistedProfile?.phone,
+      persistedProfile?.projects,
+      completeness?.sections.projects,
       savedProfile.comment,
       savedProfile.contact_email,
       savedProfile.education,
@@ -94,6 +106,7 @@ export function Workspace({ user, onLogout, profile: persistedProfile, onPatchPr
       savedProfile.location,
       savedProfile.name,
       savedProfile.phone,
+      savedProfile.projects,
       user.email,
       user.handle,
       user.initials,
@@ -161,4 +174,32 @@ export function Workspace({ user, onLogout, profile: persistedProfile, onPatchPr
       ) : null}
     </main>
   );
+}
+
+function normalizeProjectForWorkspace(project: ProjectItem): ProjectItem {
+  return {
+    ...project,
+    name: project.name || String(project.title ?? ""),
+    description: project.description || String(project.note ?? ""),
+    tech_stack: Array.isArray(project.tech_stack) ? project.tech_stack : [],
+    achievements: Array.isArray(project.achievements) ? project.achievements : [],
+    link: typeof project.link === "string" ? project.link : null,
+    comment: typeof project.comment === "string" ? project.comment : null,
+  };
+}
+
+function projectSectionState(projects: ProjectItem[]): CompletenessState {
+  if (projects.length === 0) {
+    return "empty";
+  }
+
+  const hasCompleteProject = projects.some(
+    (project) =>
+      project.name.trim() &&
+      project.description.trim() &&
+      project.tech_stack.some((tech) => tech.trim()) &&
+      project.achievements.some((achievement) => achievement.trim()),
+  );
+
+  return hasCompleteProject ? "complete" : "partial";
 }

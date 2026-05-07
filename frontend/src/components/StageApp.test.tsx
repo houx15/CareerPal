@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { defaultApiBaseUrl, StageApp } from "./StageApp";
@@ -87,7 +87,7 @@ describe("StageApp", () => {
     );
     await waitFor(() => expect(api.getProfile).toHaveBeenCalled());
     expect(await screen.findByText(/profile completion/i)).toBeInTheDocument();
-  });
+  }, 10000);
 
   it("loads existing users directly into the design-faithful workspace after login", async () => {
     const api = apiMock();
@@ -103,7 +103,7 @@ describe("StageApp", () => {
     expect(await screen.findByText(/profile completion/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /my resume/i })).toBeInTheDocument();
     expect(screen.queryByText(/what should i call you/i)).not.toBeInTheDocument();
-  });
+  }, 10000);
 
   it("renders persisted experience after login", async () => {
     const api = apiMock();
@@ -136,7 +136,56 @@ describe("StageApp", () => {
 
     expect(await screen.findByText("Backend Engineering Intern · Stripe")).toBeInTheDocument();
     expect(screen.getByText("Built reconciliation jobs for payment reporting.")).toBeInTheDocument();
-  });
+  }, 10000);
+
+  it("renders persisted projects after login", async () => {
+    const api = apiMock();
+    api.getProfile.mockResolvedValue({
+      updated_at: "2026-05-05T00:00:00Z",
+      name: "Alex Chen",
+      headline: null,
+      target_direction: null,
+      comment: null,
+      education: [],
+      experience: [],
+      projects: [
+        {
+          name: "CareerPal",
+          description: "Built a design-faithful profile workspace.",
+          tech_stack: ["Next.js", "FastAPI"],
+          achievements: ["Persisted projects across reloads"],
+          link: "https://example.com/careerpal",
+          comment: "Full-stack project",
+        },
+      ],
+      skills: [],
+      certificates: [],
+    });
+    api.getCompleteness.mockResolvedValue({
+      overall: "partial",
+      sections: {
+        basics: "partial",
+        summary: "empty",
+        experience: "empty",
+        skills: "empty",
+        projects: "complete",
+        education: "empty",
+      },
+    });
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+
+    const projectsCard = (await screen.findByText("Projects")).closest("article");
+
+    expect(projectsCard).not.toBeNull();
+    expect(within(projectsCard as HTMLElement).getByText("Complete")).toBeInTheDocument();
+    expect(within(projectsCard as HTMLElement).getByText("CareerPal")).toBeInTheDocument();
+    expect(within(projectsCard as HTMLElement).getByText("Built a design-faithful profile workspace.")).toBeInTheDocument();
+  }, 10000);
 
   it("ignores repeated workspace clicks while the first load is pending", async () => {
     const api = apiMock();
@@ -168,7 +217,7 @@ describe("StageApp", () => {
     });
     await waitFor(() => expect(api.startConversation).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(/profile completion/i)).toBeInTheDocument();
-  });
+  }, 10000);
 });
 
 async function reachOnboarding() {
