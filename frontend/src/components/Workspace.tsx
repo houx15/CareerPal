@@ -4,6 +4,7 @@ import type {
   EducationItem,
   ExperienceItem,
   GeneratedPage,
+  JobMatchAnalysis,
   PageStyleTemplate,
   ProjectItem,
   SkillItem,
@@ -54,6 +55,11 @@ interface WorkspaceProps {
   onPublishPage?: () => void | Promise<void>;
   onUnpublishPage?: () => void | Promise<void>;
   onOpenPublicPage?: (url: string) => void;
+  jobMatches?: JobMatchAnalysis[];
+  isAnalyzingJobMatch?: boolean;
+  jobMatchError?: string | null;
+  onCreateJobMatch?: (jobDescription: string) => Promise<JobMatchAnalysis>;
+  onOpenJobMatch?: (id: string) => Promise<JobMatchAnalysis>;
 }
 
 export function Workspace({
@@ -78,6 +84,11 @@ export function Workspace({
   onPublishPage,
   onUnpublishPage,
   onOpenPublicPage,
+  jobMatches,
+  isAnalyzingJobMatch,
+  jobMatchError,
+  onCreateJobMatch,
+  onOpenJobMatch,
 }: WorkspaceProps) {
   const name = profile.name || "CareerPal user";
 
@@ -120,6 +131,11 @@ export function Workspace({
       onPublishPage={onPublishPage}
       onUnpublishPage={onUnpublishPage}
       onOpenPublicPage={onOpenPublicPage}
+      jobMatches={jobMatches}
+      isAnalyzingJobMatch={isAnalyzingJobMatch}
+      jobMatchError={jobMatchError}
+      onCreateJobMatch={onCreateJobMatch}
+      onOpenJobMatch={onOpenJobMatch}
       onLogout={onLogout}
       onPatchProfile={async (payload) => {
         const saved = await onPatchProfile(payload);

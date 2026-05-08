@@ -2,9 +2,22 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../lib/api";
+import type { JobMatchAnalysis } from "../lib/types";
 import { defaultApiBaseUrl, StageApp } from "./StageApp";
 
 const originalApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+const matchAnalysis: JobMatchAnalysis = {
+  id: "match-1",
+  job_description: "Company: Vercel\nRole: Frontend Engineer\nReact and TypeScript role.",
+  company: "Vercel",
+  role: "Frontend Engineer",
+  score: 82,
+  strengths: ["React aligns with your skills."],
+  gaps: ["Add more TypeScript evidence."],
+  suggestions: ["Highlight shipped UI work."],
+  created_at: "2026-05-08T00:00:00Z",
+  updated_at: "2026-05-08T00:00:00Z",
+};
 
 function apiMock() {
   return {
@@ -77,6 +90,9 @@ function apiMock() {
       blob: new Blob(["%PDF-1.7"], { type: "application/pdf" }),
       filename: "careerpal_resume_alex-chen.pdf",
     }),
+    listJobMatches: vi.fn().mockResolvedValue({ analyses: [] }),
+    analyzeJobMatch: vi.fn().mockResolvedValue(matchAnalysis),
+    getJobMatch: vi.fn().mockResolvedValue(matchAnalysis),
   };
 }
 
@@ -377,6 +393,50 @@ describe("StageApp", () => {
       URL.createObjectURL = originalCreateObjectURL;
       URL.revokeObjectURL = originalRevokeObjectURL;
     }
+  }, 10000);
+
+  it("loads recent job match history into the match screen after login", async () => {
+    const api = apiMock();
+    api.listJobMatches.mockResolvedValue({ analyses: [matchAnalysis] });
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /match/i }));
+
+    await waitFor(() => expect(api.listJobMatches).toHaveBeenCalled());
+    await userEvent.click(await screen.findByRole("button", { name: /frontend engineer at vercel/i }));
+
+    await waitFor(() => expect(api.getJobMatch).toHaveBeenCalledWith("match-1"));
+    expect(await screen.findByRole("heading", { name: "Frontend Engineer at Vercel" })).toBeInTheDocument();
+    expect(screen.getByText("82")).toBeInTheDocument();
+  }, 10000);
+
+  it("submits a job description through StageApp and prepends the returned analysis", async () => {
+    const api = apiMock();
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /match/i }));
+
+    await userEvent.type(
+      await screen.findByRole("textbox", { name: /job description/i }),
+      "Company: Vercel\nRole: Frontend Engineer\nReact and TypeScript role.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /analyze/i }));
+
+    await waitFor(() =>
+      expect(api.analyzeJobMatch).toHaveBeenCalledWith({
+        job_description: "Company: Vercel\nRole: Frontend Engineer\nReact and TypeScript role.",
+      }),
+    );
+    expect(await screen.findByRole("heading", { name: "Frontend Engineer at Vercel" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /frontend engineer at vercel/i })).toBeInTheDocument();
   }, 10000);
 
   it("shows an export error when PDF download fails", async () => {

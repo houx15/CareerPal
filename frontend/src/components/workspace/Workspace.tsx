@@ -10,6 +10,7 @@ import type {
   EducationItem,
   ExperienceItem,
   GeneratedPage,
+  JobMatchAnalysis,
   PageStyleTemplate,
   ProfilePatch,
   ProjectItem,
@@ -53,6 +54,11 @@ interface WorkspaceProps {
   onPublishPage?: () => void | Promise<void>;
   onUnpublishPage?: () => void | Promise<void>;
   onOpenPublicPage?: (url: string) => void;
+  jobMatches?: JobMatchAnalysis[];
+  isAnalyzingJobMatch?: boolean;
+  jobMatchError?: string | null;
+  onCreateJobMatch?: (jobDescription: string) => Promise<JobMatchAnalysis>;
+  onOpenJobMatch?: (id: string) => Promise<JobMatchAnalysis>;
 }
 
 type Tab = "profile" | "match" | "resume" | "grow" | "activity" | "settings";
@@ -87,6 +93,11 @@ export function Workspace({
   onPublishPage,
   onUnpublishPage,
   onOpenPublicPage,
+  jobMatches,
+  isAnalyzingJobMatch,
+  jobMatchError,
+  onCreateJobMatch,
+  onOpenJobMatch,
 }: WorkspaceProps) {
   const { t, lang } = useLang();
   const [tab, setTab] = useState<Tab>("profile");
@@ -309,7 +320,16 @@ export function Workspace({
           onOpenMatch={() => setTab("match")}
         />
       ) : null}
-      {tab === "match" ? <MatchScreen profile={profile} /> : null}
+      {tab === "match" ? (
+        <MatchScreen
+          profile={profile}
+          jobMatches={jobMatches}
+          isAnalyzingJobMatch={isAnalyzingJobMatch}
+          jobMatchError={jobMatchError}
+          onCreateJobMatch={onCreateJobMatch}
+          onOpenJobMatch={onOpenJobMatch}
+        />
+      ) : null}
       {tab === "grow" ? <GrowScreen /> : null}
       {tab === "activity" ? <ActivityScreen /> : null}
       {tab === "settings" ? <SettingsScreen onLogout={onLogout} /> : null}

@@ -302,6 +302,99 @@ describe("ApiClient", () => {
     });
   });
 
+  it("analyzes a job description with bearer auth", async () => {
+    const analysis = {
+      id: "match-1",
+      job_description: "Company: Stripe\nRole: Backend Intern",
+      company: "Stripe",
+      role: "Backend Intern",
+      score: 78,
+      strengths: ["Profile includes Python."],
+      gaps: ["Add evidence for SQL."],
+      suggestions: ["Tailor the headline toward Backend Intern."],
+      created_at: "2026-05-08T00:00:00Z",
+      updated_at: "2026-05-08T00:00:00Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      headers: new Headers({ "Content-Type": "application/json" }),
+      json: async () => analysis,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.analyzeJobMatch({ job_description: analysis.job_description });
+
+    expect(result).toEqual(analysis);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/match/analyze", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token-123" },
+      body: JSON.stringify({ job_description: analysis.job_description }),
+    });
+  });
+
+  it("lists job match history with bearer auth", async () => {
+    const history = {
+      analyses: [
+        {
+          id: "match-1",
+          job_description: "Backend Intern",
+          company: "Stripe",
+          role: "Backend Intern",
+          score: 78,
+          strengths: [],
+          gaps: [],
+          suggestions: [],
+          created_at: "2026-05-08T00:00:00Z",
+          updated_at: "2026-05-08T00:00:00Z",
+        },
+      ],
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "Content-Type": "application/json" }),
+      json: async () => history,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.listJobMatches();
+
+    expect(result).toEqual(history);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/match/history", {
+      headers: { Authorization: "Bearer token-123" },
+    });
+  });
+
+  it("gets one job match with bearer auth", async () => {
+    const analysis = {
+      id: "match-1",
+      job_description: "Backend Intern",
+      company: "Stripe",
+      role: "Backend Intern",
+      score: 78,
+      strengths: [],
+      gaps: [],
+      suggestions: [],
+      created_at: "2026-05-08T00:00:00Z",
+      updated_at: "2026-05-08T00:00:00Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "Content-Type": "application/json" }),
+      json: async () => analysis,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.getJobMatch("match-1");
+
+    expect(result).toEqual(analysis);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/match/match-1", {
+      headers: { Authorization: "Bearer token-123" },
+    });
+  });
+
   it("gets one conversation with bearer auth", async () => {
     const conversation = {
       id: "conversation-1",

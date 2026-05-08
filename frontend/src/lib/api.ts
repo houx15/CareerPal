@@ -1,7 +1,10 @@
 import type {
   AuthResponse,
+  AnalyzeJobMatchPayload,
   CustomizePagePayload,
   GeneratedPage,
+  JobMatchAnalysis,
+  JobMatchHistory,
   Conversation,
   LoginPayload,
   PageSettingsPayload,
@@ -111,6 +114,18 @@ export class ApiClient {
 
   updatePageSettings(payload: PageSettingsPayload): Promise<GeneratedPage> {
     return this.request("/api/page/settings", { method: "PATCH", body: payload, auth: true });
+  }
+
+  analyzeJobMatch(payload: AnalyzeJobMatchPayload): Promise<JobMatchAnalysis> {
+    return this.request("/api/match/analyze", { method: "POST", body: payload, auth: true });
+  }
+
+  listJobMatches(): Promise<JobMatchHistory> {
+    return this.request("/api/match/history", { auth: true });
+  }
+
+  getJobMatch(id: string): Promise<JobMatchAnalysis> {
+    return this.request(`/api/match/${id}`, { auth: true });
   }
 
   exportProfilePdf(): Promise<PdfExport> {

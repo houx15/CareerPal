@@ -184,3 +184,24 @@ export interface CustomizePagePayload {
 export interface PageSettingsPayload {
   is_public: boolean;
 }
+
+export interface JobMatchAnalysis {
+  id: string;
+  job_description: string;
+  company: string | null;
+  role: string | null;
+  score: number;
+  strengths: string[];
+  gaps: string[];
+  suggestions: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface JobMatchHistory {
+  analyses: JobMatchAnalysis[];
+}
+
+export interface AnalyzeJobMatchPayload {
+  job_description: string;
+}

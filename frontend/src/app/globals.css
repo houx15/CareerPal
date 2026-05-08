@@ -2328,6 +2328,8 @@ input, textarea { font-family: inherit; }
 }
 .history-row-btn:first-child { border-top: none; }
 .history-row-btn:hover { background: var(--bg-tint); }
+.history-row-main { font-size: 14px; color: var(--ink); padding: 10px 0 2px; }
+.history-row-meta { font-size: 12px; color: var(--muted); padding-bottom: 10px; }
 
 /* ─────────── Match · Result ─────────── */
 .match-result-head {

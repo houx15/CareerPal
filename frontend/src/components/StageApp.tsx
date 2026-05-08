@@ -4,10 +4,13 @@ import { useMemo, useRef, useState } from "react";
 import { LangProvider } from "../i18n/LangProvider";
 import { ApiClient, ApiError, type PdfExport } from "../lib/api";
 import type {
+  AnalyzeJobMatchPayload,
   Conversation,
   ConversationMessage,
   CustomizePagePayload,
   GeneratedPage,
+  JobMatchAnalysis,
+  JobMatchHistory,
   PageStyleTemplate,
   ProfilePatch,
   ResumeStructureResponse,
@@ -45,6 +48,9 @@ export interface StageApi {
   customizePage?(payload: CustomizePagePayload): Promise<GeneratedPage>;
   updatePageSettings?(payload: PageSettingsPayload): Promise<GeneratedPage>;
   exportProfilePdf?(): Promise<PdfExport>;
+  analyzeJobMatch?(payload: AnalyzeJobMatchPayload): Promise<JobMatchAnalysis>;
+  listJobMatches?(): Promise<JobMatchHistory>;
+  getJobMatch?(id: string): Promise<JobMatchAnalysis>;
 }
 
 interface StageAppProps {
@@ -77,7 +83,10 @@ function StageAppInner({ api }: StageAppProps) {
   const [isGeneratingPage, setIsGeneratingPage] = useState(false);
   const [isUpdatingPageVisibility, setIsUpdatingPageVisibility] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [jobMatches, setJobMatches] = useState<JobMatchAnalysis[]>([]);
+  const [isAnalyzingJobMatch, setIsAnalyzingJobMatch] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
+  const [jobMatchError, setJobMatchError] = useState<string | null>(null);
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
   const [pendingEmail, setPendingEmail] = useState("");
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
@@ -121,11 +130,12 @@ function StageAppInner({ api }: StageAppProps) {
     setWorkspaceError(null);
 
     try {
-      const [nextProfile, nextCompleteness, conversation, latestPage] = await Promise.all([
+      const [nextProfile, nextCompleteness, conversation, latestPage, latestMatches] = await Promise.all([
         client.getProfile(),
         client.getCompleteness(),
         ensureCareerConversation(null),
         loadLatestPagePreview(),
+        loadJobMatchHistory(),
       ]);
       if (workspaceRequestIdRef.current !== requestId) {
         return;
@@ -135,6 +145,7 @@ function StageAppInner({ api }: StageAppProps) {
       setCompleteness(nextCompleteness);
       setOnboardingConversation(conversation ?? null);
       setGeneratedPage(latestPage);
+      setJobMatches(latestMatches);
       if (workspaceRequestIdRef.current !== requestId) {
         return;
       }
@@ -163,7 +174,10 @@ function StageAppInner({ api }: StageAppProps) {
     setIsGeneratingPage(false);
     setIsUpdatingPageVisibility(false);
     setIsExportingPdf(false);
+    setJobMatches([]);
+    setIsAnalyzingJobMatch(false);
     setPageError(null);
+    setJobMatchError(null);
     setPendingEmail("");
     setSessionUser(null);
     setAccountUser(null);
@@ -215,6 +229,21 @@ function StageAppInner({ api }: StageAppProps) {
       }
 
       throw caught;
+    }
+  }
+
+  async function loadJobMatchHistory(): Promise<JobMatchAnalysis[]> {
+    if (!client.listJobMatches) {
+      return [];
+    }
+
+    try {
+      const response = await client.listJobMatches();
+      setJobMatchError(null);
+      return response.analyses;
+    } catch (caught) {
+      setJobMatchError(caught instanceof Error ? caught.message : "Could not load recent matches.");
+      return [];
     }
   }
 
@@ -390,6 +419,45 @@ function StageAppInner({ api }: StageAppProps) {
     }
   }
 
+  async function handleCreateJobMatch(jobDescription: string): Promise<JobMatchAnalysis> {
+    if (!client.analyzeJobMatch) {
+      throw new Error("Match analysis is not available.");
+    }
+
+    setIsAnalyzingJobMatch(true);
+    setJobMatchError(null);
+
+    try {
+      const analysis = await client.analyzeJobMatch({ job_description: jobDescription });
+      setJobMatches((current) => [analysis, ...current.filter((match) => match.id !== analysis.id)]);
+      return analysis;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Could not analyze this JD.";
+      setJobMatchError(message);
+      throw new Error(message);
+    } finally {
+      setIsAnalyzingJobMatch(false);
+    }
+  }
+
+  async function handleOpenJobMatch(id: string): Promise<JobMatchAnalysis> {
+    if (!client.getJobMatch) {
+      throw new Error("Match history is not available.");
+    }
+
+    setJobMatchError(null);
+
+    try {
+      const analysis = await client.getJobMatch(id);
+      setJobMatches((current) => [analysis, ...current.filter((match) => match.id !== analysis.id)]);
+      return analysis;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Could not open this match.";
+      setJobMatchError(message);
+      throw new Error(message);
+    }
+  }
+
   function handleOpenPublicPage(url: string): void {
     if (typeof window === "undefined") {
       return;
@@ -473,12 +541,17 @@ function StageAppInner({ api }: StageAppProps) {
       isExportingPdf={isExportingPdf}
       isUpdatingPageVisibility={isUpdatingPageVisibility}
       pageError={pageError}
+      jobMatches={jobMatches}
+      isAnalyzingJobMatch={isAnalyzingJobMatch}
+      jobMatchError={jobMatchError}
       onGeneratePage={handleGeneratePage}
       onExportPdf={handleDownloadPdf}
       onCustomizePage={handleCustomizePage}
       onPublishPage={() => updatePageVisibility(true)}
       onUnpublishPage={() => updatePageVisibility(false)}
       onOpenPublicPage={handleOpenPublicPage}
+      onCreateJobMatch={handleCreateJobMatch}
+      onOpenJobMatch={handleOpenJobMatch}
       onLogout={handleLogout}
       onPatchProfile={handlePatchProfile}
     />
