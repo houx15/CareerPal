@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { LangProvider } from "../i18n/LangProvider";
 import { ApiClient } from "../lib/api";
-import type { Conversation, ConversationMessage, ProfilePatch } from "../lib/types";
+import type { Conversation, ConversationMessage, ProfilePatch, ResumeStructureResponse, ResumeUploadResponse } from "../lib/types";
 import { LoginScreen, NameIntro, SignUpScreen } from "./AuthScreens";
 import { IntroPage } from "./IntroPage";
 import { Onboarding } from "./Onboarding";
@@ -27,6 +27,8 @@ export interface StageApi {
     assistant_message: ConversationMessage;
     messages: ConversationMessage[];
   }>;
+  uploadResume?(file: File): Promise<ResumeUploadResponse>;
+  structureResume?(resumeId: string): Promise<ResumeStructureResponse>;
 }
 
 interface StageAppProps {
@@ -179,6 +181,29 @@ function StageAppInner({ api }: StageAppProps) {
     );
   }
 
+  async function handleImportResume(file: File): Promise<ResumeUploadResponse> {
+    if (!client.uploadResume) {
+      throw new Error("Resume upload is not available.");
+    }
+
+    return client.uploadResume(file);
+  }
+
+  async function handleStructureResume(resumeId: string): Promise<ResumeStructureResponse> {
+    if (!client.structureResume) {
+      throw new Error("Resume structuring is not available.");
+    }
+
+    const response = await client.structureResume(resumeId);
+    const [nextProfile, nextCompleteness] = await Promise.all([client.getProfile(), client.getCompleteness()]);
+    setProfile(nextProfile);
+    setCompleteness(nextCompleteness);
+    if (client.getConversation) {
+      setOnboardingConversation(await client.getConversation(response.conversation_id));
+    }
+    return response;
+  }
+
   async function handleOpenImproveConversation(section: ImproveSection): Promise<void> {
     const conversation = await ensureCareerConversation(focusNodeForImproveSection(section));
     setImproveConversation(conversation ?? null);
@@ -247,6 +272,8 @@ function StageAppInner({ api }: StageAppProps) {
           isLoading={isLoadingWorkspace}
           conversationMessages={onboardingConversation?.messages}
           onSendMessage={handleOnboardingMessage}
+          onImportResume={handleImportResume}
+          onStructureResume={handleStructureResume}
           onDone={loadWorkspace}
         />
         {workspaceError ? <p className="floating-error">{workspaceError}</p> : null}

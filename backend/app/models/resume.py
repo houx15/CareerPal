@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -20,6 +20,9 @@ class ResumeFile(Base):
     parsed_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     parse_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     parsed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    structured_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    structure_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    structured_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False
     )

@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_DEVELOPMENT_SECRET = "change-me-in-production"
@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     ]
 
     model_config = SettingsConfigDict(env_prefix="CAREERPAL_", env_file=".env", extra="ignore")
+
+    @field_validator("llm_base_url", "llm_model_name", "llm_api_key", mode="before")
+    @classmethod
+    def empty_llm_setting_to_none(cls, value):
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     @model_validator(mode="after")
     def require_non_default_secret_outside_local(self) -> "Settings":

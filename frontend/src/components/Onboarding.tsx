@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { LangToggle, useLang } from "../i18n/LangProvider";
 import type { CopyKey } from "../i18n/copy";
+import type { ResumeStatus } from "../lib/types";
 import { Slime, type SlimeState } from "./Slime";
 
 type KnowledgeKey = "basics" | "focus" | "exp" | "skills" | "goals";
@@ -29,6 +30,9 @@ interface OnboardingProps {
   initialMessages?: readonly ConversationMessage[];
   conversationMessages?: readonly ConversationMessage[];
   onSendMessage?: (content: string) => void | Promise<void>;
+  onImportResume?: (file: File) => Promise<{ id: string; status: ResumeStatus; parse_error?: string | null }>;
+  onStructureResume?: (resumeId: string) => Promise<{ follow_up_questions?: string[] }>;
+  onResumeImported?: () => void | Promise<void>;
 }
 
 type ConversationMessage = { role: "user" | "assistant"; content: string };
@@ -54,6 +58,9 @@ export function Onboarding({
   initialMessages = EMPTY_INITIAL_MESSAGES,
   conversationMessages,
   onSendMessage,
+  onImportResume,
+  onStructureResume,
+  onResumeImported,
 }: OnboardingProps) {
   const { t, lang } = useLang();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -61,6 +68,7 @@ export function Onboarding({
   const [step, setStep] = useState(0);
   const [knowledge, setKnowledge] = useState<Knowledge>({ basics: 1, focus: 0, exp: 0, skills: 0, goals: 0 });
   const [attached, setAttached] = useState<string | null>(null);
+  const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const streamRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const hydratedFromConversationRef = useRef(false);
@@ -111,15 +119,23 @@ export function Onboarding({
     }
 
     const body = attached ? [trimmed, `Attached: ${attached}`].filter(Boolean).join(" · ") : trimmed;
+    const resumeFile = attachedFile;
     const currentStep = step;
     setMessages((current) => [...current, { role: "user", body }, { role: "ai", state: "thinking", body: null }]);
-    void onSendMessage?.(body);
     setInput("");
 
     if (attached) {
       bumpKnowledge({ basics: 1, focus: 0, exp: 2, skills: 2, goals: 0 });
       setAttached(null);
+      setAttachedFile(null);
     }
+
+    if (resumeFile && onImportResume && onStructureResume) {
+      void importResume(resumeFile);
+      return;
+    }
+
+    void onSendMessage?.(body);
 
     window.setTimeout(() => {
       bumpKnowledge(STEP_DELTAS[currentStep] ?? { basics: 0, focus: 0, exp: 0, skills: 0, goals: 0 });
@@ -139,8 +155,30 @@ export function Onboarding({
     const file = event.target.files?.[0];
     if (file) {
       setAttached(file.name);
+      setAttachedFile(file);
     }
     event.target.value = "";
+  }
+
+  async function importResume(file: File) {
+    try {
+      const upload = await onImportResume?.(file);
+      if (!upload) {
+        throw new Error("Resume upload is not available.");
+      }
+      if (upload.status === "parse_failed") {
+        throw new Error(upload.parse_error || "Resume text could not be extracted.");
+      }
+      if (upload.status !== "parsed" && upload.status !== "structured" && upload.status !== "structure_failed") {
+        throw new Error("Resume text is not ready to structure yet.");
+      }
+      const structured = await onStructureResume?.(upload.id);
+      await onResumeImported?.();
+      setMessages((current) => replaceLastThinkingMessage(current, resumeImportMessage(structured?.follow_up_questions ?? [])));
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Resume import failed.";
+      setMessages((current) => replaceLastThinkingMessage(current, { role: "ai", state: "waiting", body: message }));
+    }
   }
 
   return (
@@ -221,7 +259,7 @@ export function Onboarding({
               </div>
             ) : null}
             <div className="composer-row">
-              <input ref={fileRef} type="file" hidden onChange={onPickFile} accept=".pdf,.doc,.docx,.txt,.md" />
+              <input ref={fileRef} type="file" hidden onChange={onPickFile} accept=".pdf,.docx" />
               <button
                 className="composer-attach-btn"
                 type="button"
@@ -279,6 +317,25 @@ function toChatMessage(message: ConversationMessage): ChatMessage {
   }
 
   return { role: "ai", state: "listening", body: message.content };
+}
+
+function resumeImportMessage(followUpQuestions: readonly string[]): ChatMessage {
+  const questions = followUpQuestions.filter((question) => question.trim());
+  const body =
+    questions.length > 0
+      ? `I imported your resume into your CareerPal profile.\n\n${questions.map((question) => `- ${question}`).join("\n")}`
+      : "I imported your resume into your CareerPal profile.";
+  return { role: "ai", state: "happy", body };
+}
+
+function replaceLastThinkingMessage(messages: ChatMessage[], replacement: ChatMessage): ChatMessage[] {
+  const next = [...messages];
+  const lastThinkingIndex = next.findLastIndex((message) => message.role === "ai" && message.body === null);
+  if (lastThinkingIndex === -1) {
+    return [...next, replacement];
+  }
+  next[lastThinkingIndex] = replacement;
+  return next;
 }
 
 function KnowledgePanel({ knowledge, user }: { knowledge: Knowledge; user: OnboardingUser }) {

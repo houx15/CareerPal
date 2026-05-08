@@ -8,12 +8,21 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
+from app.api.profile import _profile_response
 from app.core.config import get_settings
 from app.db.session import get_db
+from app.models.conversation import Conversation
 from app.models.resume import ResumeFile
 from app.models.user import User, new_uuid
-from app.schemas.resume import ResumeParsedTextResponse, ResumeParseStatusResponse, ResumeUploadResponse
+from app.schemas.resume import (
+    ResumeParsedTextResponse,
+    ResumeParseStatusResponse,
+    ResumeStructureResponse,
+    ResumeUploadResponse,
+)
+from app.services.llm import LLMProviderError, build_llm_client
 from app.services.resume_extraction import ResumeExtractionError, extract_resume_text
+from app.services.resume_structuring import ResumeStructureError, apply_resume_structure, structure_resume_text
 
 router = APIRouter(prefix="/resume", tags=["resume"])
 
@@ -96,6 +105,8 @@ def get_resume_parse_status(
         status=resume_file.status,
         parse_error=resume_file.parse_error,
         parsed_at=resume_file.parsed_at,
+        structure_error=resume_file.structure_error,
+        structured_at=resume_file.structured_at,
     )
 
 
@@ -106,12 +117,59 @@ def get_resume_parsed_text(
     db: Session = Depends(get_db),
 ) -> ResumeParsedTextResponse:
     resume_file = _get_owned_resume_file(db, current_user, resume_id)
-    if resume_file.status != "parsed" or not resume_file.parsed_text:
+    if resume_file.status not in {"parsed", "structured", "structure_failed"} or not resume_file.parsed_text:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Resume text has not been extracted",
         )
     return ResumeParsedTextResponse(id=resume_file.id, parsed_text=resume_file.parsed_text)
+
+
+@router.post("/structure/{resume_id}", response_model=ResumeStructureResponse)
+async def structure_resume(
+    resume_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ResumeStructureResponse:
+    resume_file = _get_owned_resume_file(db, current_user, resume_id)
+    if resume_file.status not in {"parsed", "structured", "structure_failed"} or not resume_file.parsed_text:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Resume text has not been extracted",
+        )
+
+    llm_client = build_llm_client(get_settings())
+    try:
+        structure = await structure_resume_text(llm_client, resume_file.parsed_text)
+    except ResumeStructureError as exc:
+        _record_structure_failure(db, resume_file, str(exc))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except LLMProviderError as exc:
+        _record_structure_failure(db, resume_file, str(exc))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+    profile = apply_resume_structure(db, current_user, structure)
+    follow_up_questions = [question.strip() for question in structure.follow_up_questions if question.strip()]
+    conversation = _create_resume_follow_up_conversation(db, current_user, follow_up_questions)
+    resume_file.structured_payload = structure.model_dump(mode="json")
+    resume_file.structure_error = None
+    resume_file.structured_at = datetime.now(timezone.utc)
+    resume_file.status = "structured"
+    db.add(resume_file)
+    db.add(conversation)
+    db.commit()
+    db.refresh(profile)
+    db.refresh(resume_file)
+    db.refresh(conversation)
+    return ResumeStructureResponse(
+        id=resume_file.id,
+        status=resume_file.status,
+        structure_error=resume_file.structure_error,
+        structured_at=resume_file.structured_at,
+        profile=_profile_response(profile),
+        conversation_id=conversation.id,
+        follow_up_questions=follow_up_questions,
+    )
 
 
 def _get_owned_resume_file(db: Session, current_user: User, resume_id: str) -> ResumeFile:
@@ -121,6 +179,39 @@ def _get_owned_resume_file(db: Session, current_user: User, resume_id: str) -> R
     if resume_file is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume file not found")
     return resume_file
+
+
+def _record_structure_failure(db: Session, resume_file: ResumeFile, message: str) -> None:
+    resume_file.status = "structure_failed"
+    resume_file.structure_error = message
+    resume_file.structured_at = None
+    db.add(resume_file)
+    db.commit()
+
+
+def _create_resume_follow_up_conversation(
+    db: Session,
+    current_user: User,
+    follow_up_questions: list[str],
+) -> Conversation:
+    questions = follow_up_questions or ["What parts of this resume should we strengthen first?"]
+    assistant_content = "I imported your resume into your CareerPal profile."
+    if questions:
+        assistant_content = f"{assistant_content}\n\n" + "\n".join(f"- {question}" for question in questions)
+    conversation = Conversation(
+        user_id=current_user.id,
+        context_type="career",
+        focus_node="resume",
+        messages=[
+            {
+                "role": "assistant",
+                "content": assistant_content,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+        ],
+    )
+    db.add(conversation)
+    return conversation
 
 
 def _validated_resume_suffix(file: UploadFile) -> str:

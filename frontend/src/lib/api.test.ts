@@ -103,6 +103,63 @@ describe("ApiClient", () => {
     });
   });
 
+  it("uploads a resume file with bearer auth without forcing a JSON content type", async () => {
+    const uploadResponse = {
+      id: "resume-1",
+      original_filename: "resume.pdf",
+      content_type: "application/pdf",
+      size_bytes: 1234,
+      status: "parsed",
+      parse_error: null,
+      parsed_at: "2026-05-08T00:00:00Z",
+      created_at: "2026-05-08T00:00:00Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      headers: new Headers({ "Content-Type": "application/json" }),
+      json: async () => uploadResponse,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+    const file = new File(["%PDF-1.4"], "resume.pdf", { type: "application/pdf" });
+
+    const result = await client.uploadResume(file);
+
+    expect(result).toEqual(uploadResponse);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/resume/upload", {
+      method: "POST",
+      headers: { Authorization: "Bearer token-123" },
+      body: expect.any(FormData),
+    });
+  });
+
+  it("structures an uploaded resume with bearer auth", async () => {
+    const structureResponse = {
+      id: "resume-1",
+      status: "structured",
+      structure_error: null,
+      structured_at: "2026-05-08T00:00:00Z",
+      profile: { name: "Alex Chen", experience: [], education: [], projects: [], skills: [], certificates: [] },
+      conversation_id: "conversation-1",
+      follow_up_questions: ["What impact should we emphasize?"],
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "Content-Type": "application/json" }),
+      json: async () => structureResponse,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.structureResume("resume-1");
+
+    expect(result).toEqual(structureResponse);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/resume/structure/resume-1", {
+      method: "POST",
+      headers: { Authorization: "Bearer token-123" },
+    });
+  });
+
   it("gets one conversation with bearer auth", async () => {
     const conversation = {
       id: "conversation-1",

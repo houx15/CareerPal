@@ -114,4 +114,37 @@ describe("Onboarding", () => {
 
     expect(screen.getByText(/tell me about your most recent role/i)).toBeInTheDocument();
   });
+
+  it("uploads an attached resume and renders structured follow-up questions in the chat", async () => {
+    const onImportResume = vi.fn().mockResolvedValue({ id: "resume-1", status: "parsed" });
+    const onStructureResume = vi.fn().mockResolvedValue({
+      id: "resume-1",
+      status: "structured",
+      conversation_id: "conversation-1",
+      follow_up_questions: ["Which AI platform roles are you targeting?", "What was the user impact at Acme?"],
+    });
+    const onResumeImported = vi.fn();
+    renderOnboarding({ onImportResume, onStructureResume, onResumeImported });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["%PDF-1.4"], "alex-resume.pdf", { type: "application/pdf" });
+
+    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: /send message/i }));
+
+    expect(screen.getByText(/attached: alex-resume\.pdf/i)).toBeInTheDocument();
+    expect(screen.getByText(/pal is thinking/i)).toBeInTheDocument();
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(screen.getByText(/i imported your resume/i)).toBeInTheDocument();
+    expect(screen.getByText(/which ai platform roles are you targeting/i)).toBeInTheDocument();
+    expect(screen.getByText(/what was the user impact at acme/i)).toBeInTheDocument();
+    expect(onImportResume).toHaveBeenCalledWith(file);
+    expect(onStructureResume).toHaveBeenCalledWith("resume-1");
+    expect(onResumeImported).toHaveBeenCalledTimes(1);
+  });
 });

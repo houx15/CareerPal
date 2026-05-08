@@ -72,6 +72,9 @@ def test_initial_migration_creates_fresh_database(tmp_path):
             "parsed_text",
             "parse_error",
             "parsed_at",
+            "structured_payload",
+            "structure_error",
+            "structured_at",
             "created_at",
             "updated_at",
         }

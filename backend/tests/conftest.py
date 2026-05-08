@@ -4,11 +4,23 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import create_app
 from app.models import resume  # noqa: F401
 from app.models import user  # noqa: F401
+
+
+@pytest.fixture(autouse=True)
+def deterministic_test_settings(monkeypatch):
+    monkeypatch.setenv("CAREERPAL_LLM_PROVIDER", "fake")
+    monkeypatch.setenv("CAREERPAL_LLM_MODEL_NAME", "careerpal-fake")
+    monkeypatch.setenv("CAREERPAL_LLM_BASE_URL", "")
+    monkeypatch.setenv("CAREERPAL_LLM_API_KEY", "")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture

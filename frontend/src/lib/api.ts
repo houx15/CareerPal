@@ -6,6 +6,8 @@ import type {
   ProfileCompleteness,
   ProfilePatch,
   RegisterPayload,
+  ResumeStructureResponse,
+  ResumeUploadResponse,
   SendMessagePayload,
   SendMessageResponse,
   StartConversationPayload,
@@ -72,9 +74,19 @@ export class ApiClient {
     return this.request("/api/conversation/message", { method: "POST", body: payload, auth: true });
   }
 
+  uploadResume(file: File): Promise<ResumeUploadResponse> {
+    const formData = new FormData();
+    formData.append("file", file);
+    return this.request("/api/resume/upload", { method: "POST", formData, auth: true });
+  }
+
+  structureResume(resumeId: string): Promise<ResumeStructureResponse> {
+    return this.request(`/api/resume/structure/${resumeId}`, { method: "POST", auth: true });
+  }
+
   private async request<T>(
     path: string,
-    options: { method?: string; body?: unknown; auth?: boolean } = {},
+    options: { method?: string; body?: unknown; formData?: FormData; auth?: boolean } = {},
   ): Promise<T> {
     const headers: Record<string, string> = {};
 
@@ -91,6 +103,7 @@ export class ApiClient {
       ...(options.method ? { method: options.method } : {}),
       ...(Object.keys(headers).length > 0 ? { headers } : {}),
       ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
+      ...(options.formData !== undefined ? { body: options.formData } : {}),
     });
 
     if (!response.ok) {

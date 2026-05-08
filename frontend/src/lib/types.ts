@@ -140,3 +140,26 @@ export interface SendMessageResponse {
   messages: ConversationMessage[];
   extraction_diff?: Record<string, unknown> | null;
 }
+
+export type ResumeStatus = "uploaded" | "parsed" | "parse_failed" | "structured" | "structure_failed";
+
+export interface ResumeUploadResponse {
+  id: string;
+  original_filename: string;
+  content_type: string;
+  size_bytes: number;
+  status: ResumeStatus;
+  parse_error?: string | null;
+  parsed_at?: string | null;
+  created_at: string;
+}
+
+export interface ResumeStructureResponse {
+  id: string;
+  status: ResumeStatus;
+  structure_error?: string | null;
+  structured_at?: string | null;
+  profile: Profile;
+  conversation_id: string;
+  follow_up_questions: string[];
+}
