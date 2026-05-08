@@ -16,10 +16,11 @@ from app.models.user import User
 from app.schemas.conversation import (
     ConversationMessageRequest,
     ConversationMessageResponse,
+    ConversationReconcileResponse,
     ConversationResponse,
     ConversationStartRequest,
 )
-from app.services.extraction import apply_profile_extraction
+from app.services.extraction import apply_profile_extraction, reconcile_conversation_profile
 from app.services.llm import LLMMessage, LLMProviderError, build_llm_client
 
 router = APIRouter(prefix="/conversation", tags=["conversation"])
@@ -93,6 +94,37 @@ def get_conversation(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
 
     return _conversation_response(conversation)
+
+
+@router.post(
+    "/{conversation_id}/reconcile",
+    response_model=ConversationReconcileResponse,
+    response_model_exclude_none=True,
+)
+def reconcile_conversation(
+    conversation_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ConversationReconcileResponse:
+    conversation = db.scalar(
+        select(Conversation).where(
+            Conversation.id == conversation_id,
+            Conversation.user_id == current_user.id,
+        )
+    )
+    if conversation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    if conversation.context_type != "career":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Only career conversations can be reconciled",
+        )
+
+    extraction_diff = reconcile_conversation_profile(db, conversation)
+    if extraction_diff:
+        db.commit()
+
+    return ConversationReconcileResponse(conversation_id=conversation.id, extraction_diff=extraction_diff)
 
 
 def _sse_event(event: str, data: dict) -> str:

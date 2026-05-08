@@ -252,6 +252,131 @@ def test_page_message_does_not_extract_profile_updates(client):
     assert profile["location"] is None
 
 
+def test_reconcile_career_conversation_applies_later_explicit_corrections(client):
+    headers = auth_headers(client)
+    conversation = client.post("/api/conversation/start", headers=headers, json={"context_type": "career"}).json()
+    client.post(
+        "/api/conversation/message",
+        headers=headers,
+        json={"conversation_id": conversation["id"], "content": "My target direction is Data engineering."},
+    )
+    client.post(
+        "/api/conversation/message",
+        headers=headers,
+        json={"conversation_id": conversation["id"], "content": "Actually, my target direction is Platform engineering."},
+    )
+
+    response = client.post(f"/api/conversation/{conversation['id']}/reconcile", headers=headers)
+    second_response = client.post(f"/api/conversation/{conversation['id']}/reconcile", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "conversation_id": conversation["id"],
+        "extraction_diff": {
+            "profile": {
+                "target_direction": {"before": "Data engineering", "after": "Platform engineering"},
+            }
+        },
+    }
+    assert second_response.status_code == 200
+    assert second_response.json() == {"conversation_id": conversation["id"]}
+    profile = client.get("/api/profile", headers=headers).json()
+    assert profile["target_direction"] == "Platform engineering"
+
+
+def test_reconcile_career_conversation_is_idempotent(client):
+    headers = auth_headers(client)
+    conversation = client.post("/api/conversation/start", headers=headers, json={"context_type": "career"}).json()
+    client.post(
+        "/api/conversation/message",
+        headers=headers,
+        json={"conversation_id": conversation["id"], "content": "My headline is Backend SWE intern."},
+    )
+
+    first = client.post(f"/api/conversation/{conversation['id']}/reconcile", headers=headers)
+    second = client.post(f"/api/conversation/{conversation['id']}/reconcile", headers=headers)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json() == {"conversation_id": conversation["id"]}
+    profile = client.get("/api/profile", headers=headers).json()
+    assert profile["headline"] == "Backend SWE intern"
+
+
+def test_reconcile_does_not_overwrite_newer_profile_edits(client):
+    headers = auth_headers(client)
+    conversation = client.post("/api/conversation/start", headers=headers, json={"context_type": "career"}).json()
+    client.post(
+        "/api/conversation/message",
+        headers=headers,
+        json={"conversation_id": conversation["id"], "content": "My target direction is Data engineering."},
+    )
+    client.patch("/api/profile", headers=headers, json={"target_direction": "Product engineering"})
+
+    response = client.post(f"/api/conversation/{conversation['id']}/reconcile", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == {"conversation_id": conversation["id"]}
+    profile = client.get("/api/profile", headers=headers).json()
+    assert profile["target_direction"] == "Product engineering"
+
+
+def test_reconcile_ignores_negative_non_factual_scalar_updates(client):
+    headers = auth_headers(client)
+    conversation = client.post("/api/conversation/start", headers=headers, json={"context_type": "career"}).json()
+    client.post(
+        "/api/conversation/message",
+        headers=headers,
+        json={
+            "conversation_id": conversation["id"],
+            "content": (
+                "My location is not important. "
+                "My headline is not sure yet. "
+                "My target direction is less important than finding a good mentor. "
+                "My summary is not decided yet. "
+                "My contact email is not a priority."
+            ),
+        },
+    )
+
+    response = client.post(f"/api/conversation/{conversation['id']}/reconcile", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == {"conversation_id": conversation["id"]}
+    profile = client.get("/api/profile", headers=headers).json()
+    assert profile["location"] is None
+    assert profile["headline"] is None
+    assert profile["target_direction"] is None
+    assert profile["comment"] is None
+    assert profile["contact_email"] is None
+
+
+def test_reconcile_rejects_page_conversations(client):
+    headers = auth_headers(client)
+    conversation = client.post("/api/conversation/start", headers=headers, json={"context_type": "page"}).json()
+
+    response = client.post(f"/api/conversation/{conversation['id']}/reconcile", headers=headers)
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Only career conversations can be reconciled"
+
+
+def test_reconcile_rejects_conversation_owned_by_another_user(client):
+    owner_headers = auth_headers(client)
+    conversation = client.post("/api/conversation/start", headers=owner_headers, json={"context_type": "career"}).json()
+    other_user = client.post(
+        "/api/auth/register",
+        json={"email": "jamie@example.com", "username": "jamie", "password": "secret123"},
+    ).json()
+
+    response = client.post(
+        f"/api/conversation/{conversation['id']}/reconcile",
+        headers={"Authorization": f"Bearer {other_user['access_token']}"},
+    )
+
+    assert response.status_code == 404
+
+
 def test_provider_failure_does_not_extract_profile_updates(client, monkeypatch):
     class FailingLLMClient:
         async def stream_chat(self, messages):

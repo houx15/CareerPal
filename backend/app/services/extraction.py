@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.conversation import Conversation
 from app.models.user import Profile, User
 
 
@@ -38,6 +39,8 @@ def extract_explicit_profile_updates(user_text: str) -> dict[str, str]:
             continue
         if field not in SUMMARY_FIELDS:
             value = _first_statement_value(field, value)
+        if _is_non_factual_scalar_value(value):
+            continue
         if field == "phone" and not _looks_like_phone_update(value):
             continue
         if field == "contact_email" and "@" not in value:
@@ -69,6 +72,62 @@ def apply_profile_extraction(db: Session, user_id: str, user_text: str) -> dict 
     return {"profile": changes}
 
 
+def reconcile_conversation_profile(db: Session, conversation: Conversation) -> dict | None:
+    field_values: dict[str, list[str]] = {}
+    for message in conversation.messages or []:
+        if message.get("role") != "user":
+            continue
+        content = message.get("content")
+        if not content:
+            continue
+        for field, value in extract_explicit_profile_updates(_normalize_correction_prefix(content)).items():
+            field_values.setdefault(field, []).append(value)
+
+    if not field_values:
+        return None
+
+    profile = _locked_profile_for_user(db, conversation.user_id)
+    if profile is None:
+        user = db.scalar(select(User).where(User.id == conversation.user_id))
+        if user is None:
+            raise RuntimeError("User disappeared while applying reconciliation")
+        profile = Profile(user_id=conversation.user_id)
+        db.add(profile)
+        db.flush()
+
+    updates = _reconciled_profile_updates(profile, field_values)
+    if not updates:
+        return None
+
+    changes = _apply_profile_updates(profile, updates)
+    if not changes:
+        return None
+
+    db.add(profile)
+    return {"profile": changes}
+
+
+def _locked_profile_for_user(db: Session, user_id: str) -> Profile | None:
+    return db.scalar(select(Profile).where(Profile.user_id == user_id).with_for_update())
+
+
+def _normalize_correction_prefix(user_text: str) -> str:
+    return re.sub(r"(^|[.!?\n]\s*)actually,\s+my\s+", r"\1My ", user_text, flags=re.IGNORECASE)
+
+
+def _reconciled_profile_updates(profile: Profile, field_values: Mapping[str, list[str]]) -> dict[str, str]:
+    updates = {}
+    for field, values in field_values.items():
+        desired = values[-1]
+        current = getattr(profile, field)
+        if current == desired:
+            continue
+        if current is not None and current not in values[:-1]:
+            continue
+        updates[field] = desired
+    return updates
+
+
 def _clean_value(raw_value: str) -> str | None:
     value = raw_value.strip().strip("\"'").rstrip(".!?").strip()
     return value or None
@@ -85,6 +144,19 @@ def _first_statement_value(field: str, value: str) -> str:
 
 def _looks_like_phone_update(value: str) -> bool:
     return bool(re.search(r"\d", value))
+
+
+def _is_non_factual_scalar_value(value: str) -> bool:
+    normalized = re.sub(r"\s+", " ", value.strip().lower())
+    if normalized in {"unknown", "none", "n/a"}:
+        return True
+    return (
+        normalized.startswith("not important")
+        or normalized.startswith("not a priority")
+        or normalized.startswith("not decided")
+        or normalized.startswith("not sure")
+        or normalized.startswith("less important")
+    )
 
 
 def _apply_profile_updates(profile: Profile, updates: Mapping[str, str]) -> dict:

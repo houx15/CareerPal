@@ -38,3 +38,8 @@ class ConversationMessageResponse(BaseModel):
     assistant_message: ConversationMessage
     messages: list[ConversationMessage]
     extraction_diff: dict | None = None
+
+
+class ConversationReconcileResponse(BaseModel):
+    conversation_id: str
+    extraction_diff: dict | None = None
