@@ -160,6 +160,100 @@ describe("ApiClient", () => {
     });
   });
 
+  it("generates a profile page with bearer auth", async () => {
+    const page = {
+      id: "page-1",
+      html_content: "<!doctype html><html><body>Alex Chen</body></html>",
+      style_template: "technical",
+      version: 1,
+      is_public: false,
+      created_at: "2026-05-08T00:00:00Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "Content-Type": "application/json" }),
+      json: async () => page,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.generatePage("technical");
+
+    expect(result).toEqual(page);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/page/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token-123" },
+      body: JSON.stringify({ style_template: "technical" }),
+    });
+  });
+
+  it("gets the latest generated page preview with bearer auth", async () => {
+    const page = {
+      id: "page-1",
+      html_content: "<!doctype html><html><body>Alex Chen</body></html>",
+      style_template: "clean-professional",
+      version: 3,
+      is_public: false,
+      created_at: "2026-05-08T00:02:00Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "Content-Type": "application/json" }),
+      json: async () => page,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.getPagePreview();
+
+    expect(result).toEqual(page);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/page/preview", {
+      headers: { Authorization: "Bearer token-123" },
+    });
+  });
+
+
+  it("customizes a profile page from an SSE done payload with bearer auth", async () => {
+    const page = {
+      id: "page-2",
+      html_content: "<!doctype html><html><body>Projects first</body></html>",
+      style_template: "modern-creative",
+      version: 2,
+      is_public: false,
+      created_at: "2026-05-08T00:01:00Z",
+    };
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('event: message\ndata: {"delta":"<!doctype html>"}\n\n'));
+        controller.enqueue(encoder.encode(`event: done\ndata: ${JSON.stringify(page)}\n\n`));
+        controller.close();
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "Content-Type": "text/event-stream" }),
+      body: stream,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.customizePage({
+      conversation_id: "conversation-1",
+      instruction: "Make projects more prominent.",
+    });
+
+    expect(result).toEqual(page);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/page/customize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token-123" },
+      body: JSON.stringify({
+        conversation_id: "conversation-1",
+        instruction: "Make projects more prominent.",
+      }),
+    });
+  });
+
   it("gets one conversation with bearer auth", async () => {
     const conversation = {
       id: "conversation-1",

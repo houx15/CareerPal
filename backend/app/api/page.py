@@ -1,4 +1,7 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -7,16 +10,22 @@ from app.api.auth import get_current_user
 from app.api.profile import _current_profile, _profile_response
 from app.core.config import get_settings
 from app.db.session import get_db
+from app.models.conversation import Conversation
 from app.models.page import GeneratedPage
 from app.models.user import User
 from app.schemas.page import (
+    CustomizePageRequest,
     GeneratePageRequest,
     GeneratedPagePreview,
     GeneratedPageVersion,
     GeneratedPageVersionsResponse,
 )
 from app.services.llm import build_llm_client
-from app.services.page_generation import generate_page_html
+from app.services.page_generation import (
+    build_page_customization_messages,
+    generate_page_html,
+    validate_page_html,
+)
 
 router = APIRouter(prefix="/page", tags=["page"])
 MAX_PAGE_VERSION_ATTEMPTS = 3
@@ -49,6 +58,62 @@ async def generate_page(
             detail="Could not allocate generated page version",
         ) from exc
     return _page_preview(page)
+
+
+@router.post("/customize")
+async def customize_page(
+    payload: CustomizePageRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    conversation = db.scalar(
+        select(Conversation).where(
+            Conversation.id == payload.conversation_id,
+            Conversation.user_id == current_user.id,
+        )
+    )
+    if conversation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    if conversation.context_type != "page":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Customization requires a page conversation",
+        )
+
+    latest_page = _latest_generated_page(db, current_user)
+    if latest_page is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No generated page found")
+
+    profile = _current_profile(current_user, db)
+    profile_payload = _profile_response(profile).model_dump()
+    llm_client = build_llm_client(get_settings())
+    messages = build_page_customization_messages(latest_page.html_content, profile_payload, payload.instruction)
+
+    async def stream():
+        html_chunks = []
+        try:
+            async for chunk in llm_client.stream_chat(messages):
+                html_chunks.append(chunk)
+                yield _sse_event("message", {"delta": chunk})
+
+            html_content = validate_page_html("".join(html_chunks).strip())
+            page = _persist_generated_page(db, current_user, html_content, latest_page.style_template)
+            conversation.messages = [
+                *(conversation.messages or []),
+                {"role": "user", "content": payload.instruction},
+                {"role": "assistant", "content": f"Updated page version {page.version}."},
+            ]
+            db.add(conversation)
+            db.commit()
+            yield f"event: done\ndata: {_page_preview(page).model_dump_json()}\n\n"
+        except IntegrityError:
+            db.rollback()
+            yield _sse_event("error", {"message": "Could not allocate generated page version"})
+        except Exception:
+            db.rollback()
+            yield _sse_event("error", {"message": "Page customization failed"})
+
+    return StreamingResponse(stream(), media_type="text/event-stream")
 
 
 @router.get("/preview", response_model=GeneratedPagePreview)
@@ -115,6 +180,10 @@ def _persist_generated_page(
             if attempt == MAX_PAGE_VERSION_ATTEMPTS - 1:
                 raise
     raise RuntimeError("Unable to persist generated page")
+
+
+def _sse_event(event: str, data: dict[str, str]) -> str:
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
 
 def _page_preview(page: GeneratedPage) -> GeneratedPagePreview:

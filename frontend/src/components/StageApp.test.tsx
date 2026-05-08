@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import { ApiError } from "../lib/api";
 import { defaultApiBaseUrl, StageApp } from "./StageApp";
 
 function apiMock() {
@@ -44,6 +45,23 @@ function apiMock() {
         content: "I noted that. CareerPal's AI response will be enabled in a later milestone.",
       },
       messages: [],
+    }),
+    getPagePreview: vi.fn().mockRejectedValue(new ApiError(404, "No generated page found")),
+    generatePage: vi.fn().mockResolvedValue({
+      id: "page-1",
+      html_content: "<!doctype html><html><body><h1>Alex Chen</h1></body></html>",
+      style_template: "technical",
+      version: 1,
+      is_public: false,
+      created_at: "2026-05-08T00:00:00Z",
+    }),
+    customizePage: vi.fn().mockResolvedValue({
+      id: "page-2",
+      html_content: "<!doctype html><html><body><h1>Projects first</h1></body></html>",
+      style_template: "clean-professional",
+      version: 2,
+      is_public: false,
+      created_at: "2026-05-08T00:01:00Z",
     }),
   };
 }
@@ -105,6 +123,129 @@ describe("StageApp", () => {
     expect(await screen.findByText(/profile completion/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /my resume/i })).toBeInTheDocument();
     expect(screen.queryByText(/what should i call you/i)).not.toBeInTheDocument();
+  }, 10000);
+
+  it("loads the workspace when no generated page exists yet", async () => {
+    const api = apiMock();
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+
+    await waitFor(() => expect(api.getPagePreview).toHaveBeenCalled());
+    expect(await screen.findByText(/profile completion/i)).toBeInTheDocument();
+  }, 10000);
+
+  it("generates a page from the resume screen and renders the returned preview", async () => {
+    const api = apiMock();
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+
+    await userEvent.click(await screen.findByRole("button", { name: /my resume/i }));
+    await userEvent.click(screen.getByRole("button", { name: /terminal/i }));
+    await userEvent.click(screen.getByRole("button", { name: /create my page/i }));
+
+    await waitFor(() => expect(api.generatePage).toHaveBeenCalledWith("technical"));
+    expect(await screen.findByTitle("Generated living resume preview")).toHaveAttribute(
+      "srcdoc",
+      "<!doctype html><html><body><h1>Alex Chen</h1></body></html>",
+    );
+  }, 10000);
+
+  it("customizes a generated page through a separate page conversation", async () => {
+    const api = apiMock();
+    api.getPagePreview.mockResolvedValue({
+      id: "page-1",
+      html_content: "<!doctype html><html><body><h1>Alex Chen</h1></body></html>",
+      style_template: "clean-professional",
+      version: 1,
+      is_public: false,
+      created_at: "2026-05-08T00:00:00Z",
+    });
+    api.listConversations.mockResolvedValue([
+      { id: "career-conversation", context_type: "career", focus_node: null, messages: [] },
+      {
+        id: "page-conversation",
+        context_type: "page",
+        focus_node: null,
+        messages: [{ role: "assistant", content: "What should this page emphasize?" }],
+      },
+    ]);
+    api.getConversation.mockImplementation(async (id: string) =>
+      id === "page-conversation"
+        ? {
+            id: "page-conversation",
+            context_type: "page",
+            focus_node: null,
+            messages: [{ role: "assistant", content: "What should this page emphasize?" }],
+          }
+        : { id: "career-conversation", context_type: "career", focus_node: null, messages: [] },
+    );
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+
+    await userEvent.click(await screen.findByRole("button", { name: /my resume/i }));
+    await userEvent.click(screen.getByRole("button", { name: /edit page/i }));
+    await userEvent.type(screen.getByRole("textbox", { name: /page customization request/i }), "Make projects more prominent.");
+    await userEvent.click(screen.getByRole("button", { name: /send page request/i }));
+
+    await waitFor(() =>
+      expect(api.customizePage).toHaveBeenCalledWith({
+        conversation_id: "page-conversation",
+        instruction: "Make projects more prominent.",
+      }),
+    );
+    expect(api.startConversation).not.toHaveBeenCalledWith({ context_type: "page", focus_node: null });
+    expect(await screen.findByTitle("Generated living resume preview")).toHaveAttribute(
+      "srcdoc",
+      "<!doctype html><html><body><h1>Projects first</h1></body></html>",
+    );
+  }, 10000);
+
+  it("keeps the page customization request visible when customization fails", async () => {
+    const api = apiMock();
+    api.getPagePreview.mockResolvedValue({
+      id: "page-1",
+      html_content: "<!doctype html><html><body><h1>Alex Chen</h1></body></html>",
+      style_template: "clean-professional",
+      version: 1,
+      is_public: false,
+      created_at: "2026-05-08T00:00:00Z",
+    });
+    api.listConversations.mockResolvedValue([
+      { id: "career-conversation", context_type: "career", focus_node: null, messages: [] },
+      { id: "page-conversation", context_type: "page", focus_node: null, messages: [] },
+    ]);
+    api.getConversation.mockImplementation(async (id: string) =>
+      id === "page-conversation"
+        ? { id: "page-conversation", context_type: "page", focus_node: null, messages: [] }
+        : { id: "career-conversation", context_type: "career", focus_node: null, messages: [] },
+    );
+    api.customizePage.mockRejectedValue(new Error("Page customization failed"));
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /my resume/i }));
+    await userEvent.click(screen.getByRole("button", { name: /edit page/i }));
+    const input = screen.getByRole("textbox", { name: /page customization request/i });
+    await userEvent.type(input, "Make projects more prominent.");
+    await userEvent.click(screen.getByRole("button", { name: /send page request/i }));
+
+    expect(await screen.findByText("Page customization failed")).toBeInTheDocument();
+    expect(input).toHaveValue("Make projects more prominent.");
   }, 10000);
 
   it("reuses an existing general career conversation when loading the workspace", async () => {

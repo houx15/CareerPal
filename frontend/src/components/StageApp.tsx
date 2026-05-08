@@ -2,8 +2,17 @@
 
 import { useMemo, useRef, useState } from "react";
 import { LangProvider } from "../i18n/LangProvider";
-import { ApiClient } from "../lib/api";
-import type { Conversation, ConversationMessage, ProfilePatch, ResumeStructureResponse, ResumeUploadResponse } from "../lib/types";
+import { ApiClient, ApiError } from "../lib/api";
+import type {
+  Conversation,
+  ConversationMessage,
+  CustomizePagePayload,
+  GeneratedPage,
+  PageStyleTemplate,
+  ProfilePatch,
+  ResumeStructureResponse,
+  ResumeUploadResponse,
+} from "../lib/types";
 import { LoginScreen, NameIntro, SignUpScreen } from "./AuthScreens";
 import { IntroPage } from "./IntroPage";
 import { Onboarding } from "./Onboarding";
@@ -21,7 +30,7 @@ export interface StageApi {
   getCompleteness(): Promise<WorkspaceCompleteness>;
   listConversations?(): Promise<Conversation[]>;
   getConversation?(id: string): Promise<Conversation>;
-  startConversation?(payload: { context_type: "career"; focus_node?: string | null }): Promise<Conversation>;
+  startConversation?(payload: { context_type: "career" | "page"; focus_node?: string | null }): Promise<Conversation>;
   sendMessage?(payload: { conversation_id: string; content: string }): Promise<{
     conversation_id: string;
     assistant_message: ConversationMessage;
@@ -29,6 +38,9 @@ export interface StageApi {
   }>;
   uploadResume?(file: File): Promise<ResumeUploadResponse>;
   structureResume?(resumeId: string): Promise<ResumeStructureResponse>;
+  getPagePreview?(): Promise<GeneratedPage>;
+  generatePage?(styleTemplate: PageStyleTemplate): Promise<GeneratedPage>;
+  customizePage?(payload: CustomizePagePayload): Promise<GeneratedPage>;
 }
 
 interface StageAppProps {
@@ -56,6 +68,10 @@ function StageAppInner({ api }: StageAppProps) {
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [onboardingConversation, setOnboardingConversation] = useState<Conversation | null>(null);
   const [improveConversation, setImproveConversation] = useState<Conversation | null>(null);
+  const [pageConversation, setPageConversation] = useState<Conversation | null>(null);
+  const [generatedPage, setGeneratedPage] = useState<GeneratedPage | null>(null);
+  const [isGeneratingPage, setIsGeneratingPage] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
   const [pendingEmail, setPendingEmail] = useState("");
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
@@ -97,10 +113,11 @@ function StageAppInner({ api }: StageAppProps) {
     setWorkspaceError(null);
 
     try {
-      const [nextProfile, nextCompleteness, conversation] = await Promise.all([
+      const [nextProfile, nextCompleteness, conversation, latestPage] = await Promise.all([
         client.getProfile(),
         client.getCompleteness(),
         ensureCareerConversation(null),
+        loadLatestPagePreview(),
       ]);
       if (workspaceRequestIdRef.current !== requestId) {
         return;
@@ -109,6 +126,7 @@ function StageAppInner({ api }: StageAppProps) {
       setProfile(nextProfile);
       setCompleteness(nextCompleteness);
       setOnboardingConversation(conversation ?? null);
+      setGeneratedPage(latestPage);
       if (workspaceRequestIdRef.current !== requestId) {
         return;
       }
@@ -132,6 +150,10 @@ function StageAppInner({ api }: StageAppProps) {
     setCompleteness(null);
     setOnboardingConversation(null);
     setImproveConversation(null);
+    setPageConversation(null);
+    setGeneratedPage(null);
+    setIsGeneratingPage(false);
+    setPageError(null);
     setPendingEmail("");
     setSessionUser(null);
     setIsLoadingWorkspace(false);
@@ -167,6 +189,45 @@ function StageAppInner({ api }: StageAppProps) {
     }
 
     return client.startConversation?.({ context_type: "career", focus_node: focusNode });
+  }
+
+  async function loadLatestPagePreview(): Promise<GeneratedPage | null> {
+    if (!client.getPagePreview) {
+      return null;
+    }
+
+    try {
+      return await client.getPagePreview();
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 404) {
+        return null;
+      }
+
+      throw caught;
+    }
+  }
+
+  async function ensurePageConversation(): Promise<Conversation | undefined> {
+    if (pageConversation) {
+      return pageConversation;
+    }
+
+    if (client.listConversations && client.getConversation) {
+      const conversations = await client.listConversations();
+      const existing = conversations.find(
+        (conversation) => conversation.context_type === "page" && (conversation.focus_node ?? null) === null,
+      );
+
+      if (existing) {
+        const conversation = await client.getConversation(existing.id);
+        setPageConversation(conversation);
+        return conversation;
+      }
+    }
+
+    const conversation = await client.startConversation?.({ context_type: "page", focus_node: null });
+    setPageConversation(conversation ?? null);
+    return conversation;
   }
 
   async function handleOnboardingMessage(content: string | ConversationMessage): Promise<void> {
@@ -234,6 +295,50 @@ function StageAppInner({ api }: StageAppProps) {
     setImproveConversation({ ...conversation, messages: response.messages });
   }
 
+  async function handleGeneratePage(styleTemplate: PageStyleTemplate): Promise<void> {
+    if (!client.generatePage) {
+      return;
+    }
+
+    setIsGeneratingPage(true);
+    setPageError(null);
+
+    try {
+      setGeneratedPage(await client.generatePage(styleTemplate));
+    } catch (caught) {
+      setPageError(caught instanceof Error ? caught.message : "Could not generate your page.");
+    } finally {
+      setIsGeneratingPage(false);
+    }
+  }
+
+  async function handleCustomizePage(instruction: string): Promise<void> {
+    if (!client.customizePage) {
+      return;
+    }
+
+    setIsGeneratingPage(true);
+    setPageError(null);
+
+    try {
+      const conversation = await ensurePageConversation();
+      if (!conversation) {
+        throw new Error("Page chat is not available.");
+      }
+
+      const nextPage = await client.customizePage({ conversation_id: conversation.id, instruction });
+      setGeneratedPage(nextPage);
+      if (client.getConversation) {
+        setPageConversation(await client.getConversation(conversation.id));
+      }
+    } catch (caught) {
+      setPageError(caught instanceof Error ? caught.message : "Could not update your page.");
+      throw caught;
+    } finally {
+      setIsGeneratingPage(false);
+    }
+  }
+
   if (stage === "intro") {
     return <IntroPage onGetStarted={() => setStage("signup")} onSignIn={() => setStage("login")} />;
   }
@@ -293,6 +398,12 @@ function StageAppInner({ api }: StageAppProps) {
       conversationFocus={improveConversation ? improveSectionForFocusNode(improveConversation.focus_node) : null}
       onSendMessage={handleImproveMessage}
       onOpenConversation={handleOpenImproveConversation}
+      generatedPage={generatedPage}
+      pageConversationMessages={pageConversation ? toImproveMessages(pageConversation.messages) : undefined}
+      isGeneratingPage={isGeneratingPage}
+      pageError={pageError}
+      onGeneratePage={handleGeneratePage}
+      onCustomizePage={handleCustomizePage}
       onLogout={handleLogout}
       onPatchProfile={handlePatchProfile}
     />

@@ -163,3 +163,19 @@ export interface ResumeStructureResponse {
   conversation_id: string;
   follow_up_questions: string[];
 }
+
+export type PageStyleTemplate = "clean-professional" | "modern-creative" | "technical";
+
+export interface GeneratedPage {
+  id: string;
+  html_content: string;
+  style_template: PageStyleTemplate;
+  version: number;
+  is_public: boolean;
+  created_at: string;
+}
+
+export interface CustomizePagePayload {
+  conversation_id: string;
+  instruction: string;
+}

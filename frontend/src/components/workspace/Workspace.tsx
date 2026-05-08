@@ -4,7 +4,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { sampleProfiles, type DemoProfile } from "../../fixtures/careerpalDemoData";
 import type { CopyKey } from "../../i18n/copy";
 import { LangToggle, useLang } from "../../i18n/LangProvider";
-import type { CertificateItem, CompletenessState, EducationItem, ExperienceItem, ProfilePatch, ProjectItem, SkillItem } from "../../lib/types";
+import type {
+  CertificateItem,
+  CompletenessState,
+  EducationItem,
+  ExperienceItem,
+  GeneratedPage,
+  PageStyleTemplate,
+  ProfilePatch,
+  ProjectItem,
+  SkillItem,
+} from "../../lib/types";
 import { Slime } from "../Slime";
 import { ProfileDashboard, type ProfileSectionId } from "./ProfileDashboard";
 import { EditDrawer, ImproveChatOverlay, type ImproveChatMessage, type ImproveChatSendPayload, type ImproveSection } from "./WorkspaceOverlays";
@@ -31,6 +41,12 @@ interface WorkspaceProps {
   conversationFocus?: ImproveSection | null;
   onSendMessage?: (payload: ImproveChatSendPayload) => void | Promise<void>;
   onOpenConversation?: (section: ImproveSection) => void;
+  generatedPage?: GeneratedPage | null;
+  pageConversationMessages?: Array<{ role: "ai" | "user"; body: string }>;
+  isGeneratingPage?: boolean;
+  pageError?: string | null;
+  onGeneratePage?: (styleTemplate: PageStyleTemplate) => void | Promise<void>;
+  onCustomizePage?: (instruction: string) => void | Promise<void>;
 }
 
 type Tab = "profile" | "match" | "resume" | "grow" | "activity" | "settings";
@@ -53,6 +69,12 @@ export function Workspace({
   conversationFocus,
   onSendMessage,
   onOpenConversation,
+  generatedPage,
+  pageConversationMessages,
+  isGeneratingPage,
+  pageError,
+  onGeneratePage,
+  onCustomizePage,
 }: WorkspaceProps) {
   const { t, lang } = useLang();
   const [tab, setTab] = useState<Tab>("profile");
@@ -257,7 +279,18 @@ export function Workspace({
       </header>
 
       {tab === "profile" ? <ProfileDashboard profile={profile} onImprove={() => openImproveChat("any")} onSection={setEditSection} /> : null}
-      {tab === "resume" ? <ResumeScreen profile={profile} onOpenMatch={() => setTab("match")} /> : null}
+      {tab === "resume" ? (
+        <ResumeScreen
+          profile={profile}
+          generatedPage={generatedPage}
+          pageConversationMessages={pageConversationMessages}
+          isGeneratingPage={isGeneratingPage}
+          pageError={pageError}
+          onGeneratePage={onGeneratePage}
+          onCustomizePage={onCustomizePage}
+          onOpenMatch={() => setTab("match")}
+        />
+      ) : null}
       {tab === "match" ? <MatchScreen profile={profile} /> : null}
       {tab === "grow" ? <GrowScreen /> : null}
       {tab === "activity" ? <ActivityScreen /> : null}

@@ -1,4 +1,13 @@
-import type { CertificateItem, CompletenessState, EducationItem, ExperienceItem, ProjectItem, SkillItem } from "../lib/types";
+import type {
+  CertificateItem,
+  CompletenessState,
+  EducationItem,
+  ExperienceItem,
+  GeneratedPage,
+  PageStyleTemplate,
+  ProjectItem,
+  SkillItem,
+} from "../lib/types";
 import type { ProfilePatch } from "../lib/types";
 import { Workspace as PrototypeWorkspace } from "./workspace/Workspace";
 import type { ImproveChatMessage, ImproveChatSendPayload, ImproveSection } from "./workspace/WorkspaceOverlays";
@@ -32,6 +41,12 @@ interface WorkspaceProps {
   conversationFocus?: ImproveSection | null;
   onSendMessage?: (payload: ImproveChatSendPayload) => void | Promise<void>;
   onOpenConversation?: (section: ImproveSection) => void;
+  generatedPage?: GeneratedPage | null;
+  pageConversationMessages?: Array<{ role: "ai" | "user"; body: string }>;
+  isGeneratingPage?: boolean;
+  pageError?: string | null;
+  onGeneratePage?: (styleTemplate: PageStyleTemplate) => void | Promise<void>;
+  onCustomizePage?: (instruction: string) => void | Promise<void>;
 }
 
 export function Workspace({
@@ -43,6 +58,12 @@ export function Workspace({
   conversationFocus,
   onSendMessage,
   onOpenConversation,
+  generatedPage,
+  pageConversationMessages,
+  isGeneratingPage,
+  pageError,
+  onGeneratePage,
+  onCustomizePage,
 }: WorkspaceProps) {
   const name = profile.name || "CareerPal user";
 
@@ -73,6 +94,12 @@ export function Workspace({
       conversationFocus={conversationFocus}
       onSendMessage={onSendMessage}
       onOpenConversation={onOpenConversation}
+      generatedPage={generatedPage}
+      pageConversationMessages={pageConversationMessages}
+      isGeneratingPage={isGeneratingPage}
+      pageError={pageError}
+      onGeneratePage={onGeneratePage}
+      onCustomizePage={onCustomizePage}
       onLogout={onLogout}
       onPatchProfile={async (payload) => {
         const saved = await onPatchProfile(payload);

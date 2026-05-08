@@ -11,6 +11,11 @@ function renderWorkspace({
   conversationFocus,
   onSendMessage,
   onOpenConversation,
+  generatedPage,
+  pageConversationMessages,
+  isGeneratingPage,
+  onGeneratePage,
+  onCustomizePage,
 }: {
   profile?: Parameters<typeof Workspace>[0]["profile"];
   completeness?: Parameters<typeof Workspace>[0]["completeness"];
@@ -18,6 +23,11 @@ function renderWorkspace({
   conversationFocus?: Parameters<typeof Workspace>[0]["conversationFocus"];
   onSendMessage?: Parameters<typeof Workspace>[0]["onSendMessage"];
   onOpenConversation?: Parameters<typeof Workspace>[0]["onOpenConversation"];
+  generatedPage?: Parameters<typeof Workspace>[0]["generatedPage"];
+  pageConversationMessages?: Parameters<typeof Workspace>[0]["pageConversationMessages"];
+  isGeneratingPage?: Parameters<typeof Workspace>[0]["isGeneratingPage"];
+  onGeneratePage?: Parameters<typeof Workspace>[0]["onGeneratePage"];
+  onCustomizePage?: Parameters<typeof Workspace>[0]["onCustomizePage"];
 } = {}) {
   const onPatchProfile = vi.fn();
   render(
@@ -32,6 +42,11 @@ function renderWorkspace({
         conversationFocus={conversationFocus}
         onSendMessage={onSendMessage}
         onOpenConversation={onOpenConversation}
+        generatedPage={generatedPage}
+        pageConversationMessages={pageConversationMessages}
+        isGeneratingPage={isGeneratingPage}
+        onGeneratePage={onGeneratePage}
+        onCustomizePage={onCustomizePage}
       />
     </LangProvider>,
   );
@@ -169,6 +184,97 @@ describe("Workspace", () => {
     await user.click(screen.getByRole("button", { name: /talk to pal/i }));
 
     expect(onOpenConversation).toHaveBeenCalledWith("summary");
+  });
+
+  it("generates the living resume site with the selected design template", async () => {
+    const user = userEvent.setup();
+    const onGeneratePage = vi.fn().mockResolvedValue(undefined);
+    renderWorkspace({ onGeneratePage });
+
+    await user.click(screen.getByRole("button", { name: /my resume/i }));
+    await user.click(screen.getByRole("button", { name: /terminal/i }));
+    await user.click(screen.getByRole("button", { name: /create my page/i }));
+
+    expect(onGeneratePage).toHaveBeenCalledWith("technical");
+  });
+
+  it("renders an existing generated page preview and customizes it through page workflow", async () => {
+    const user = userEvent.setup();
+    const onCustomizePage = vi.fn().mockResolvedValue(undefined);
+    renderWorkspace({
+      generatedPage: {
+        id: "page-1",
+        html_content: "<!doctype html><html><body><h1>Alex Chen</h1></body></html>",
+        style_template: "clean-professional",
+        version: 2,
+        is_public: false,
+        created_at: "2026-05-08T00:00:00Z",
+      },
+      pageConversationMessages: [{ role: "ai", body: "What should this page emphasize?" }],
+      onCustomizePage,
+    });
+
+    await user.click(screen.getByRole("button", { name: /my resume/i }));
+    expect(screen.getByTitle("Generated living resume preview")).toHaveAttribute(
+      "srcdoc",
+      "<!doctype html><html><body><h1>Alex Chen</h1></body></html>",
+    );
+    expect(screen.getByText(/version 2/i)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /edit page/i }));
+    expect(screen.getByText("What should this page emphasize?")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: /page customization request/i }), {
+      target: { value: "Make projects more prominent." },
+    });
+    await user.click(screen.getByRole("button", { name: /send page request/i }));
+
+    expect(onCustomizePage).toHaveBeenCalledWith("Make projects more prominent.");
+  });
+
+  it("keeps a page customization request when submission fails", async () => {
+    const user = userEvent.setup();
+    const onCustomizePage = vi.fn().mockRejectedValue(new Error("Page customization failed"));
+    renderWorkspace({
+      generatedPage: {
+        id: "page-1",
+        html_content: "<!doctype html><html><body><h1>Alex Chen</h1></body></html>",
+        style_template: "clean-professional",
+        version: 2,
+        is_public: false,
+        created_at: "2026-05-08T00:00:00Z",
+      },
+      onCustomizePage,
+    });
+
+    await user.click(screen.getByRole("button", { name: /my resume/i }));
+    await user.click(screen.getByRole("button", { name: /edit page/i }));
+    const input = screen.getByRole("textbox", { name: /page customization request/i });
+    fireEvent.change(input, { target: { value: "Make projects more prominent." } });
+    await user.click(screen.getByRole("button", { name: /send page request/i }));
+
+    expect(input).toHaveValue("Make projects more prominent.");
+  });
+
+  it("disables page customization controls while a request is in flight", async () => {
+    const user = userEvent.setup();
+    renderWorkspace({
+      generatedPage: {
+        id: "page-1",
+        html_content: "<!doctype html><html><body><h1>Alex Chen</h1></body></html>",
+        style_template: "clean-professional",
+        version: 2,
+        is_public: false,
+        created_at: "2026-05-08T00:00:00Z",
+      },
+      isGeneratingPage: true,
+      onCustomizePage: vi.fn(),
+    });
+
+    await user.click(screen.getByRole("button", { name: /my resume/i }));
+    await user.click(screen.getByRole("button", { name: /edit page/i }));
+
+    expect(screen.getByRole("textbox", { name: /page customization request/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /send page request/i })).toBeDisabled();
   });
 
   it("saves edited basics through the profile patch callback and updates the hero", async () => {

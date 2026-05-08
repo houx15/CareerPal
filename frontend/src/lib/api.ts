@@ -1,5 +1,7 @@
 import type {
   AuthResponse,
+  CustomizePagePayload,
+  GeneratedPage,
   Conversation,
   LoginPayload,
   Profile,
@@ -11,6 +13,7 @@ import type {
   SendMessagePayload,
   SendMessageResponse,
   StartConversationPayload,
+  PageStyleTemplate,
   User,
 } from "./types";
 
@@ -82,6 +85,22 @@ export class ApiClient {
 
   structureResume(resumeId: string): Promise<ResumeStructureResponse> {
     return this.request(`/api/resume/structure/${resumeId}`, { method: "POST", auth: true });
+  }
+
+  generatePage(styleTemplate: PageStyleTemplate): Promise<GeneratedPage> {
+    return this.request("/api/page/generate", {
+      method: "POST",
+      body: { style_template: styleTemplate },
+      auth: true,
+    });
+  }
+
+  getPagePreview(): Promise<GeneratedPage> {
+    return this.request("/api/page/preview", { auth: true });
+  }
+
+  customizePage(payload: CustomizePagePayload): Promise<GeneratedPage> {
+    return this.request("/api/page/customize", { method: "POST", body: payload, auth: true });
   }
 
   private async request<T>(

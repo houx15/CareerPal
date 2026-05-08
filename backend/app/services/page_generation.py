@@ -71,11 +71,29 @@ async def generate_page_html(
     async for chunk in llm_client.stream_chat(messages):
         chunks.append(chunk)
     html = "".join(chunks).strip()
+    return validate_page_html(html)
+
+
+def validate_page_html(html: str) -> str:
     if not html:
         raise ValueError("LLM returned empty page HTML")
     if not HTML_DOCUMENT_RE.fullmatch(html):
         raise ValueError("LLM returned non-HTML page content")
     return html
+
+
+async def customize_page_html(
+    llm_client: LLMClient,
+    current_page_html: str,
+    profile_payload: dict[str, Any],
+    instruction: str,
+) -> str:
+    messages = build_page_customization_messages(current_page_html, profile_payload, instruction)
+    chunks = []
+    async for chunk in llm_client.stream_chat(messages):
+        chunks.append(chunk)
+    html = "".join(chunks).strip()
+    return validate_page_html(html)
 
 
 def build_page_generation_messages(
@@ -107,6 +125,42 @@ def build_page_generation_messages(
                 "- Structure: header with name/headline, then only the sections present in the profile data\n"
                 "- Each section should be engaging and visually distinct, not a plain list\n"
                 "- Include subtle interactions such as hover effects or smooth scrolls, but no JavaScript frameworks\n"
+                "- Output HTML only, with no markdown fences or explanation"
+            ),
+        ),
+    ]
+
+
+def build_page_customization_messages(
+    current_page_html: str,
+    profile_payload: dict[str, Any],
+    instruction: str,
+) -> list[LLMMessage]:
+    filtered_payload = filtered_profile_payload(profile_payload)
+    profile_json = json.dumps(filtered_payload, ensure_ascii=False, default=str, indent=2)
+    return [
+        LLMMessage(
+            role="system",
+            content=(
+                "You are a web design assistant helping customize a personal profile page. "
+                "Return only complete self-contained HTML with inline CSS."
+            ),
+        ),
+        LLMMessage(
+            role="user",
+            content=(
+                "Current page HTML:\n"
+                f"{current_page_html}\n\n"
+                "Student profile data:\n"
+                f"{profile_json}\n\n"
+                "User's customization request:\n"
+                f"{instruction}\n\n"
+                "Rules:\n"
+                "- Modify the HTML/CSS to fulfill the request\n"
+                "- Stay within the bounds of a personal profile page\n"
+                "- Only use information from the provided profile data - never invent content\n"
+                "- Maintain responsiveness\n"
+                "- Output the complete modified HTML page\n"
                 "- Output HTML only, with no markdown fences or explanation"
             ),
         ),
