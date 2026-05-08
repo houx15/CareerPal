@@ -1,8 +1,10 @@
+from datetime import datetime, timezone
 from pathlib import Path
 import tempfile
 import zipfile
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
@@ -10,7 +12,8 @@ from app.core.config import get_settings
 from app.db.session import get_db
 from app.models.resume import ResumeFile
 from app.models.user import User, new_uuid
-from app.schemas.resume import ResumeUploadResponse
+from app.schemas.resume import ResumeParsedTextResponse, ResumeParseStatusResponse, ResumeUploadResponse
+from app.services.resume_extraction import ResumeExtractionError, extract_resume_text
 
 router = APIRouter(prefix="/resume", tags=["resume"])
 
@@ -37,6 +40,16 @@ async def upload_resume(
         max_upload_bytes=settings.resume_max_upload_bytes,
         suffix=suffix,
     )
+    try:
+        parsed_text = extract_resume_text(storage_path, file.content_type or "")
+        parse_error = None
+        parsed_at = datetime.now(timezone.utc)
+        upload_status = "parsed"
+    except ResumeExtractionError as exc:
+        parsed_text = None
+        parse_error = str(exc)
+        parsed_at = None
+        upload_status = "parse_failed"
 
     resume_file = ResumeFile(
         user_id=current_user.id,
@@ -44,7 +57,10 @@ async def upload_resume(
         content_type=file.content_type or "",
         size_bytes=size_bytes,
         storage_path=str(storage_path),
-        status="uploaded",
+        status=upload_status,
+        parsed_text=parsed_text,
+        parse_error=parse_error,
+        parsed_at=parsed_at,
     )
     db.add(resume_file)
     try:
@@ -62,8 +78,49 @@ async def upload_resume(
         content_type=resume_file.content_type,
         size_bytes=resume_file.size_bytes,
         status=resume_file.status,
+        parse_error=resume_file.parse_error,
+        parsed_at=resume_file.parsed_at,
         created_at=resume_file.created_at,
     )
+
+
+@router.get("/parse-status/{resume_id}", response_model=ResumeParseStatusResponse)
+def get_resume_parse_status(
+    resume_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ResumeParseStatusResponse:
+    resume_file = _get_owned_resume_file(db, current_user, resume_id)
+    return ResumeParseStatusResponse(
+        id=resume_file.id,
+        status=resume_file.status,
+        parse_error=resume_file.parse_error,
+        parsed_at=resume_file.parsed_at,
+    )
+
+
+@router.get("/parsed/{resume_id}", response_model=ResumeParsedTextResponse)
+def get_resume_parsed_text(
+    resume_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ResumeParsedTextResponse:
+    resume_file = _get_owned_resume_file(db, current_user, resume_id)
+    if resume_file.status != "parsed" or not resume_file.parsed_text:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Resume text has not been extracted",
+        )
+    return ResumeParsedTextResponse(id=resume_file.id, parsed_text=resume_file.parsed_text)
+
+
+def _get_owned_resume_file(db: Session, current_user: User, resume_id: str) -> ResumeFile:
+    resume_file = db.execute(
+        select(ResumeFile).where(ResumeFile.id == resume_id, ResumeFile.user_id == current_user.id)
+    ).scalar_one_or_none()
+    if resume_file is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Resume file not found")
+    return resume_file
 
 
 def _validated_resume_suffix(file: UploadFile) -> str:

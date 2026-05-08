@@ -69,6 +69,9 @@ def test_initial_migration_creates_fresh_database(tmp_path):
             "size_bytes",
             "storage_path",
             "status",
+            "parsed_text",
+            "parse_error",
+            "parsed_at",
             "created_at",
             "updated_at",
         }

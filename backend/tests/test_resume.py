@@ -1,15 +1,18 @@
 import asyncio
-import zipfile
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 
+import fitz
 import pytest
+from docx import Document
 from fastapi import HTTPException
 
 from app.api import resume as resume_api
 from app.api.resume import store_validated_resume
 from app.core.config import get_settings
 from app.models.resume import ResumeFile
+from app.services.resume_extraction import extract_resume_text
 
 
 @pytest.fixture(autouse=True)
@@ -26,14 +29,22 @@ def auth_headers(client):
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
-def make_docx_bytes() -> bytes:
-    archive_path = Path("/tmp/careerpal-test.docx")
-    with zipfile.ZipFile(archive_path, "w") as archive:
-        archive.writestr("[Content_Types].xml", "<Types></Types>")
-        archive.writestr("word/document.xml", "<w:document></w:document>")
-    content = archive_path.read_bytes()
-    archive_path.unlink()
-    return content
+def make_pdf_bytes(text: str) -> bytes:
+    document = fitz.open()
+    page = document.new_page()
+    page.insert_text((72, 72), text)
+    return document.tobytes()
+
+
+def make_docx_bytes_with_text(text: str, table_text: str | None = None) -> bytes:
+    document = Document()
+    document.add_paragraph(text)
+    if table_text:
+        table = document.add_table(rows=1, cols=1)
+        table.cell(0, 0).text = table_text
+    stream = BytesIO()
+    document.save(stream)
+    return stream.getvalue()
 
 
 def configure_resume_storage(monkeypatch, storage_dir, max_upload_bytes=None):
@@ -43,14 +54,37 @@ def configure_resume_storage(monkeypatch, storage_dir, max_upload_bytes=None):
     get_settings.cache_clear()
 
 
+def test_extracts_text_from_pdf_fixture(tmp_path):
+    path = tmp_path / "resume.pdf"
+    path.write_bytes(make_pdf_bytes("Alex Chen Backend Engineer"))
+
+    text = extract_resume_text(path, "application/pdf")
+
+    assert "Alex Chen Backend Engineer" in text
+
+
+def test_extracts_text_from_docx_fixture(tmp_path):
+    path = tmp_path / "resume.docx"
+    path.write_bytes(make_docx_bytes_with_text("Built distributed systems", "Python Django PostgreSQL"))
+
+    text = extract_resume_text(
+        path,
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )
+
+    assert "Built distributed systems" in text
+    assert "Python Django PostgreSQL" in text
+
+
 def test_authenticated_user_can_upload_pdf_resume(client, db_session, tmp_path, monkeypatch):
     configure_resume_storage(monkeypatch, tmp_path / "resumes")
     headers = auth_headers(client)
+    content = make_pdf_bytes("Alex Chen sample resume")
 
     response = client.post(
         "/api/resume/upload",
         headers=headers,
-        files={"file": ("resume.pdf", b"%PDF-1.4\nsample resume", "application/pdf")},
+        files={"file": ("resume.pdf", content, "application/pdf")},
     )
 
     assert response.status_code == 201
@@ -58,8 +92,10 @@ def test_authenticated_user_can_upload_pdf_resume(client, db_session, tmp_path, 
     assert body["id"]
     assert body["original_filename"] == "resume.pdf"
     assert body["content_type"] == "application/pdf"
-    assert body["size_bytes"] == len(b"%PDF-1.4\nsample resume")
-    assert body["status"] == "uploaded"
+    assert body["size_bytes"] == len(content)
+    assert body["status"] == "parsed"
+    assert body["parse_error"] is None
+    assert body["parsed_at"]
     assert body["created_at"]
     assert "storage_path" not in body
     resume_file = db_session.get(ResumeFile, body["id"])
@@ -67,7 +103,7 @@ def test_authenticated_user_can_upload_pdf_resume(client, db_session, tmp_path, 
     assert resume_file.user_id
     stored_path = Path(resume_file.storage_path)
     assert stored_path.exists()
-    assert stored_path.read_bytes() == b"%PDF-1.4\nsample resume"
+    assert stored_path.read_bytes() == content
     assert stored_path.is_relative_to(tmp_path / "resumes")
 
 
@@ -112,6 +148,22 @@ def test_resume_upload_rejects_oversized_file(client, db_session, tmp_path, monk
     assert db_session.query(ResumeFile).count() == 0
 
 
+def test_resume_upload_rejects_empty_file(client, db_session, tmp_path, monkeypatch):
+    configure_resume_storage(monkeypatch, tmp_path / "resumes")
+    headers = auth_headers(client)
+
+    response = client.post(
+        "/api/resume/upload",
+        headers=headers,
+        files={"file": ("resume.pdf", b"", "application/pdf")},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Resume file is empty"
+    assert not (tmp_path / "resumes").exists()
+    assert db_session.query(ResumeFile).count() == 0
+
+
 def test_authenticated_user_can_upload_docx_resume(client, tmp_path, monkeypatch):
     configure_resume_storage(monkeypatch, tmp_path / "resumes")
     headers = auth_headers(client)
@@ -120,12 +172,97 @@ def test_authenticated_user_can_upload_docx_resume(client, tmp_path, monkeypatch
     response = client.post(
         "/api/resume/upload",
         headers=headers,
-        files={"file": ("resume.docx", make_docx_bytes(), content_type)},
+        files={"file": ("resume.docx", make_docx_bytes_with_text("Built APIs"), content_type)},
     )
 
     assert response.status_code == 201
     assert response.json()["content_type"] == content_type
     assert response.json()["original_filename"] == "resume.docx"
+    assert response.json()["status"] == "parsed"
+
+
+def test_upload_extracts_pdf_text_and_exposes_parse_result(client, db_session, tmp_path, monkeypatch):
+    configure_resume_storage(monkeypatch, tmp_path / "resumes")
+    headers = auth_headers(client)
+
+    upload = client.post(
+        "/api/resume/upload",
+        headers=headers,
+        files={"file": ("resume.pdf", make_pdf_bytes("Alex Chen Backend Engineer"), "application/pdf")},
+    )
+
+    assert upload.status_code == 201
+    resume_id = upload.json()["id"]
+    status_response = client.get(f"/api/resume/parse-status/{resume_id}", headers=headers)
+    parsed_response = client.get(f"/api/resume/parsed/{resume_id}", headers=headers)
+
+    assert status_response.status_code == 200
+    assert status_response.json()["status"] == "parsed"
+    assert status_response.json()["parse_error"] is None
+    assert parsed_response.status_code == 200
+    assert "Alex Chen Backend Engineer" in parsed_response.json()["parsed_text"]
+
+    resume_file = db_session.get(ResumeFile, resume_id)
+    assert resume_file.status == "parsed"
+    assert "Alex Chen Backend Engineer" in resume_file.parsed_text
+    assert resume_file.parsed_at is not None
+
+
+def test_upload_records_actionable_error_for_unreadable_resume(client, db_session, tmp_path, monkeypatch):
+    configure_resume_storage(monkeypatch, tmp_path / "resumes")
+    headers = auth_headers(client)
+
+    response = client.post(
+        "/api/resume/upload",
+        headers=headers,
+        files={"file": ("resume.pdf", b"%PDF-1.4\n%%EOF", "application/pdf")},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "parse_failed"
+    assert body["parse_error"] == "Resume file does not contain readable text"
+    resume_id = body["id"]
+    parsed_response = client.get(f"/api/resume/parsed/{resume_id}", headers=headers)
+    assert parsed_response.status_code == 422
+    assert parsed_response.json()["detail"] == "Resume text has not been extracted"
+
+
+@pytest.mark.parametrize("endpoint", ["parse-status", "parsed"])
+def test_resume_parse_endpoints_reject_files_owned_by_another_user(client, tmp_path, monkeypatch, endpoint):
+    configure_resume_storage(monkeypatch, tmp_path / "resumes")
+    owner_headers = auth_headers(client)
+    upload = client.post(
+        "/api/resume/upload",
+        headers=owner_headers,
+        files={"file": ("resume.pdf", make_pdf_bytes("Private resume"), "application/pdf")},
+    )
+    other = client.post(
+        "/api/auth/register",
+        json={"email": "jamie.resume@example.com", "username": "jamieresume", "password": "secret123"},
+    ).json()
+
+    response = client.get(
+        f"/api/resume/{endpoint}/{upload.json()['id']}",
+        headers={"Authorization": f"Bearer {other['access_token']}"},
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize("endpoint", ["parse-status", "parsed"])
+def test_resume_parse_endpoints_require_authentication(client, tmp_path, monkeypatch, endpoint):
+    configure_resume_storage(monkeypatch, tmp_path / "resumes")
+    owner_headers = auth_headers(client)
+    upload = client.post(
+        "/api/resume/upload",
+        headers=owner_headers,
+        files={"file": ("resume.pdf", make_pdf_bytes("Private resume"), "application/pdf")},
+    )
+
+    response = client.get(f"/api/resume/{endpoint}/{upload.json()['id']}")
+
+    assert response.status_code == 401
 
 
 def test_resume_upload_rejects_spoofed_pdf_content(client, db_session, tmp_path, monkeypatch):
