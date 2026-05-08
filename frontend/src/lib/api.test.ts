@@ -76,4 +76,54 @@ describe("ApiClient", () => {
       new ApiError(422, "email: Field required; password: String should have at least 8 characters", detail),
     );
   });
+
+  it("lists conversation history with bearer auth", async () => {
+    const conversations = [
+      {
+        id: "conversation-1",
+        context_type: "career",
+        focus_node: null,
+        messages: [],
+        created_at: "2026-05-08T00:00:00Z",
+        updated_at: "2026-05-08T00:00:00Z",
+      },
+    ];
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => conversations,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.listConversations();
+
+    expect(result).toEqual(conversations);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/conversation/history", {
+      headers: { Authorization: "Bearer token-123" },
+    });
+  });
+
+  it("gets one conversation with bearer auth", async () => {
+    const conversation = {
+      id: "conversation-1",
+      context_type: "page",
+      focus_node: "theme",
+      messages: [],
+      created_at: "2026-05-08T00:00:00Z",
+      updated_at: "2026-05-08T00:00:00Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => conversation,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.getConversation("conversation-1");
+
+    expect(result).toEqual(conversation);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/conversation/conversation-1", {
+      headers: { Authorization: "Bearer token-123" },
+    });
+  });
 });

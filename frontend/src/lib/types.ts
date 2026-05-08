@@ -112,6 +112,7 @@ export type ConversationRole = "user" | "assistant";
 export interface ConversationMessage {
   role: ConversationRole;
   content: string;
+  timestamp?: string | null;
 }
 
 export interface StartConversationPayload {
@@ -124,6 +125,8 @@ export interface Conversation {
   context_type: ConversationContextType;
   focus_node: string | null;
   messages: ConversationMessage[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface SendMessagePayload {

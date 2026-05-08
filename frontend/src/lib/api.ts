@@ -60,6 +60,14 @@ export class ApiClient {
     return this.request("/api/conversation/start", { method: "POST", body: payload, auth: true });
   }
 
+  listConversations(): Promise<Conversation[]> {
+    return this.request("/api/conversation/history", { auth: true });
+  }
+
+  getConversation(id: string): Promise<Conversation> {
+    return this.request(`/api/conversation/${id}`, { auth: true });
+  }
+
   sendMessage(payload: SendMessagePayload): Promise<SendMessageResponse> {
     return this.request("/api/conversation/message", { method: "POST", body: payload, auth: true });
   }
