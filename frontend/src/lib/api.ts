@@ -98,7 +98,72 @@ export class ApiClient {
       throw new ApiError(response.status, error.message, error.detail);
     }
 
+    if (response.headers?.get("content-type")?.startsWith("text/event-stream")) {
+      return this.eventStreamPayload(response);
+    }
+
     return (await response.json()) as T;
+  }
+
+  private async eventStreamPayload<T>(response: Response): Promise<T> {
+    if (!response.body) {
+      throw new ApiError(response.status, "Streaming response did not include a body");
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let donePayload: T | null = null;
+
+    const consumeEvent = (eventText: string) => {
+      let eventName = "message";
+      const dataLines: string[] = [];
+
+      for (const line of eventText.split(/\r?\n/)) {
+        if (line.startsWith("event:")) {
+          eventName = line.slice("event:".length).trim();
+        } else if (line.startsWith("data:")) {
+          dataLines.push(line.slice("data:".length).trimStart());
+        }
+      }
+
+      if (eventName === "done" && dataLines.length > 0) {
+        donePayload = JSON.parse(dataLines.join("\n")) as T;
+      } else if (eventName === "error" && dataLines.length > 0) {
+        const errorPayload = JSON.parse(dataLines.join("\n")) as { message?: unknown };
+        throw new ApiError(
+          response.status,
+          typeof errorPayload.message === "string" ? errorPayload.message : "Streaming response failed",
+        );
+      }
+    };
+
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value, { stream: !done });
+
+      let delimiter = /\r?\n\r?\n/.exec(buffer);
+      while (delimiter) {
+        const eventEnd = delimiter.index;
+        consumeEvent(buffer.slice(0, eventEnd));
+        buffer = buffer.slice(eventEnd + delimiter[0].length);
+        delimiter = /\r?\n\r?\n/.exec(buffer);
+      }
+
+      if (done) {
+        break;
+      }
+    }
+
+    if (buffer.trim()) {
+      consumeEvent(buffer);
+    }
+
+    if (donePayload === null) {
+      throw new ApiError(response.status, "Streaming response did not include a done event");
+    }
+
+    return donePayload;
   }
 
   private async errorPayload(response: Response): Promise<{ message: string; detail?: unknown }> {

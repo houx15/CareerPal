@@ -126,4 +126,109 @@ describe("ApiClient", () => {
       headers: { Authorization: "Bearer token-123" },
     });
   });
+
+  it("parses streaming conversation events and returns the done payload with bearer auth", async () => {
+    const donePayload = {
+      conversation_id: "conversation-1",
+      assistant_message: {
+        role: "assistant",
+        content: "Let's shape that internship story into a stronger project bullet.",
+        timestamp: "2026-05-08T00:01:00Z",
+      },
+      messages: [
+        {
+          role: "user",
+          content: "I built a resume parser during my internship.",
+          timestamp: "2026-05-08T00:00:00Z",
+        },
+        {
+          role: "assistant",
+          content: "Let's shape that internship story into a stronger project bullet.",
+          timestamp: "2026-05-08T00:01:00Z",
+        },
+      ],
+    };
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode('event: message\ndata: {"content":"Let\'s shape"}\n\n'));
+        controller.enqueue(encoder.encode(`event: done\ndata: ${JSON.stringify(donePayload)}\n\n`));
+        controller.close();
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "Content-Type": "text/event-stream; charset=utf-8" }),
+      body: stream,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.sendMessage({
+      conversation_id: "conversation-1",
+      content: "I built a resume parser during my internship.",
+    });
+
+    expect(result).toEqual(donePayload);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/conversation/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token-123" },
+      body: JSON.stringify({
+        conversation_id: "conversation-1",
+        content: "I built a resume parser during my internship.",
+      }),
+    });
+  });
+
+  it("parses streaming conversation events split across network chunks", async () => {
+    const donePayload = {
+      conversation_id: "conversation-1",
+      assistant_message: {
+        role: "assistant",
+        content: "First chunk second chunk",
+        timestamp: "2026-05-08T00:01:00Z",
+      },
+      messages: [],
+    };
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        const payload = `event: message\ndata: {"delta":"First"}\n\nevent: done\ndata: ${JSON.stringify(donePayload)}\n\n`;
+        controller.enqueue(encoder.encode(payload.slice(0, 21)));
+        controller.enqueue(encoder.encode(payload.slice(21)));
+        controller.close();
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "Content-Type": "text/event-stream" }),
+      body: stream,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    await expect(client.sendMessage({ conversation_id: "conversation-1", content: "Hi" })).resolves.toEqual(donePayload);
+  });
+
+  it("throws ApiError when a streaming conversation emits an error event", async () => {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('event: message\ndata: {"delta":"Partial"}\n\n'));
+        controller.enqueue(encoder.encode('event: error\ndata: {"message":"LLM provider error: overloaded"}\n\n'));
+        controller.close();
+      },
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "Content-Type": "text/event-stream" }),
+      body: stream,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    await expect(client.sendMessage({ conversation_id: "conversation-1", content: "Hi" })).rejects.toEqual(
+      new ApiError(200, "LLM provider error: overloaded"),
+    );
+  });
 });
