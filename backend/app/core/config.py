@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     llm_base_url: str | None = None
     llm_model_name: str | None = "careerpal-fake"
     llm_api_key: str | None = None
+    resume_storage_dir: str = "./storage/resumes"
+    resume_max_upload_bytes: int = 5 * 1024 * 1024
     cors_origins: list[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",

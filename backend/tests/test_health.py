@@ -49,7 +49,7 @@ def test_initial_migration_creates_fresh_database(tmp_path):
     try:
         inspector = inspect(engine)
 
-        assert set(inspector.get_table_names()) >= {"users", "profiles", "conversations"}
+        assert set(inspector.get_table_names()) >= {"users", "profiles", "conversations", "resume_files"}
         assert "updated_at" in {column["name"] for column in inspector.get_columns("users")}
         assert "updated_at" in {column["name"] for column in inspector.get_columns("profiles")}
         assert {column["name"] for column in inspector.get_columns("conversations")} == {
@@ -61,6 +61,32 @@ def test_initial_migration_creates_fresh_database(tmp_path):
             "created_at",
             "updated_at",
         }
+        assert {column["name"] for column in inspector.get_columns("resume_files")} == {
+            "id",
+            "user_id",
+            "original_filename",
+            "content_type",
+            "size_bytes",
+            "storage_path",
+            "status",
+            "created_at",
+            "updated_at",
+        }
+        resume_foreign_keys = inspector.get_foreign_keys("resume_files")
+        assert resume_foreign_keys == [
+            {
+                "name": None,
+                "constrained_columns": ["user_id"],
+                "referred_schema": None,
+                "referred_table": "users",
+                "referred_columns": ["id"],
+                "options": {},
+            }
+        ]
+        assert any(
+            index["name"] == "ix_resume_files_user_id" and index["column_names"] == ["user_id"]
+            for index in inspector.get_indexes("resume_files")
+        )
     finally:
         engine.dispose()
 
