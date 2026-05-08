@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.auth import router as auth_router
 from app.api.conversation import router as conversation_router
 from app.api.health import router as health_router
+from app.api.page import router as page_router
 from app.api.profile import router as profile_router
 from app.api.resume import router as resume_router
 from app.core.config import get_settings
@@ -24,6 +25,7 @@ def create_app() -> FastAPI:
     app.include_router(profile_router, prefix="/api")
     app.include_router(conversation_router, prefix="/api")
     app.include_router(resume_router, prefix="/api")
+    app.include_router(page_router, prefix="/api")
     return app
 
 

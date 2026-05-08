@@ -8,6 +8,7 @@ from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import create_app
+from app.models import page  # noqa: F401
 from app.models import resume  # noqa: F401
 from app.models import user  # noqa: F401
 
