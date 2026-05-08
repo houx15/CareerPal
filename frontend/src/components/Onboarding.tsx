@@ -26,11 +26,18 @@ interface OnboardingProps {
   user: OnboardingUser;
   onDone: () => void;
   isLoading?: boolean;
+  initialMessages?: readonly ConversationMessage[];
+  conversationMessages?: readonly ConversationMessage[];
+  onSendMessage?: (content: string) => void | Promise<void>;
 }
+
+type ConversationMessage = { role: "user" | "assistant"; content: string };
 
 type ChatMessage =
   | { role: "user"; body: string }
   | { role: "ai"; state?: SlimeState; body: string | null; options?: readonly string[]; final?: boolean };
+
+const EMPTY_INITIAL_MESSAGES: readonly ConversationMessage[] = [];
 
 const KNOWLEDGE_SECTIONS: Array<{ id: KnowledgeKey; icon: string; title: CopyKey; hint: CopyKey }> = [
   { id: "basics", icon: "◆", title: "onb_know_basics", hint: "onb_know_basics_hint" },
@@ -40,7 +47,14 @@ const KNOWLEDGE_SECTIONS: Array<{ id: KnowledgeKey; icon: string; title: CopyKey
   { id: "goals", icon: "◐", title: "onb_know_goals", hint: "onb_know_goals_hint" },
 ];
 
-export function Onboarding({ user, onDone, isLoading = false }: OnboardingProps) {
+export function Onboarding({
+  user,
+  onDone,
+  isLoading = false,
+  initialMessages = EMPTY_INITIAL_MESSAGES,
+  conversationMessages,
+  onSendMessage,
+}: OnboardingProps) {
   const { t, lang } = useLang();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -49,8 +63,20 @@ export function Onboarding({ user, onDone, isLoading = false }: OnboardingProps)
   const [attached, setAttached] = useState<string | null>(null);
   const streamRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  const hydratedFromConversationRef = useRef(false);
 
   useEffect(() => {
+    const hydratedMessages = conversationMessages ?? initialMessages;
+    if (hydratedMessages.length > 0 && !hydratedFromConversationRef.current) {
+      hydratedFromConversationRef.current = true;
+      setMessages(hydratedMessages.map(toChatMessage));
+      return;
+    }
+
+    if (hydratedFromConversationRef.current) {
+      return;
+    }
+
     setMessages([{ role: "ai", state: "speaking", body: t("onb_1").replace("{name}", user.name) }]);
     const promptTimer = window.setTimeout(() => {
       setMessages((current) => [
@@ -60,7 +86,7 @@ export function Onboarding({ user, onDone, isLoading = false }: OnboardingProps)
     }, 900);
 
     return () => window.clearTimeout(promptTimer);
-  }, [lang, t, user.name]);
+  }, [conversationMessages, initialMessages, lang, t, user.name]);
 
   useEffect(() => {
     if (streamRef.current) {
@@ -87,6 +113,7 @@ export function Onboarding({ user, onDone, isLoading = false }: OnboardingProps)
     const body = attached ? [trimmed, `Attached: ${attached}`].filter(Boolean).join(" · ") : trimmed;
     const currentStep = step;
     setMessages((current) => [...current, { role: "user", body }, { role: "ai", state: "thinking", body: null }]);
+    void onSendMessage?.(body);
     setInput("");
 
     if (attached) {
@@ -244,6 +271,14 @@ export function Onboarding({ user, onDone, isLoading = false }: OnboardingProps)
       </section>
     </main>
   );
+}
+
+function toChatMessage(message: ConversationMessage): ChatMessage {
+  if (message.role === "user") {
+    return { role: "user", body: message.content };
+  }
+
+  return { role: "ai", state: "listening", body: message.content };
 }
 
 function KnowledgePanel({ knowledge, user }: { knowledge: Knowledge; user: OnboardingUser }) {

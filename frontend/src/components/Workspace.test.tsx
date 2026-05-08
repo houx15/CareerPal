@@ -4,7 +4,21 @@ import { describe, expect, it, vi } from "vitest";
 import { LangProvider } from "../i18n/LangProvider";
 import { Workspace } from "./workspace/Workspace";
 
-function renderWorkspace({ profile = {}, completeness }: { profile?: Parameters<typeof Workspace>[0]["profile"]; completeness?: Parameters<typeof Workspace>[0]["completeness"] } = {}) {
+function renderWorkspace({
+  profile = {},
+  completeness,
+  conversationMessages,
+  conversationFocus,
+  onSendMessage,
+  onOpenConversation,
+}: {
+  profile?: Parameters<typeof Workspace>[0]["profile"];
+  completeness?: Parameters<typeof Workspace>[0]["completeness"];
+  conversationMessages?: Parameters<typeof Workspace>[0]["conversationMessages"];
+  conversationFocus?: Parameters<typeof Workspace>[0]["conversationFocus"];
+  onSendMessage?: Parameters<typeof Workspace>[0]["onSendMessage"];
+  onOpenConversation?: Parameters<typeof Workspace>[0]["onOpenConversation"];
+} = {}) {
   const onPatchProfile = vi.fn();
   render(
     <LangProvider>
@@ -14,6 +28,10 @@ function renderWorkspace({ profile = {}, completeness }: { profile?: Parameters<
         profile={profile}
         completeness={completeness}
         onPatchProfile={onPatchProfile}
+        conversationMessages={conversationMessages}
+        conversationFocus={conversationFocus}
+        onSendMessage={onSendMessage}
+        onOpenConversation={onOpenConversation}
       />
     </LangProvider>,
   );
@@ -48,6 +66,109 @@ describe("Workspace", () => {
     expect(screen.getAllByText(/which part should we work on/i).length).toBeGreaterThan(0);
     await userEvent.click(screen.getByRole("button", { name: /^skills$/i }));
     expect(screen.getByText(/let's polish your skills/i)).toBeInTheDocument();
+  });
+
+  it("renders persisted improvement conversation messages when chat opens", async () => {
+    renderWorkspace({
+      conversationFocus: "any",
+      conversationMessages: [
+        { role: "ai", body: "I saved your prior coaching context." },
+        { role: "user", body: "Help me rewrite the project impact." },
+      ],
+    });
+
+    await userEvent.click(screen.getByRole("button", { name: /improve via chat/i }));
+
+    expect(screen.getByText("I saved your prior coaching context.")).toBeInTheDocument();
+    expect(screen.getByText("Help me rewrite the project impact.")).toBeInTheDocument();
+  });
+
+  it("hydrates focused improvement messages that arrive after the overlay opens", async () => {
+    const view = render(
+      <LangProvider>
+        <Workspace
+          user={{ name: "Alex Chen", initials: "AC", email: "alex@example.com", handle: "alex" }}
+          onLogout={vi.fn()}
+          profile={{}}
+          onPatchProfile={vi.fn()}
+          conversationFocus={null}
+          conversationMessages={undefined}
+        />
+      </LangProvider>,
+    );
+
+    await userEvent.click(screen.getAllByRole("button", { name: /edit/i })[1]);
+    await userEvent.click(screen.getByRole("button", { name: /talk to pal/i }));
+
+    expect(screen.getByText(/let's polish your summary/i)).toBeInTheDocument();
+
+    view.rerender(
+      <LangProvider>
+        <Workspace
+          user={{ name: "Alex Chen", initials: "AC", email: "alex@example.com", handle: "alex" }}
+          onLogout={vi.fn()}
+          profile={{}}
+          onPatchProfile={vi.fn()}
+          conversationFocus="summary"
+          conversationMessages={[{ role: "ai", body: "Previously we tightened your summary around analytics." }]}
+        />
+      </LangProvider>,
+    );
+
+    expect(await screen.findByText("Previously we tightened your summary around analytics.")).toBeInTheDocument();
+  });
+
+  it("does not show persisted messages from a different focused section", async () => {
+    renderWorkspace({
+      conversationFocus: "skills",
+      conversationMessages: [{ role: "ai", body: "Let's tune your Python skills." }],
+    });
+
+    await userEvent.click(screen.getAllByRole("button", { name: /edit/i })[1]);
+    await userEvent.click(screen.getByRole("button", { name: /talk to pal/i }));
+
+    expect(screen.queryByText("Let's tune your Python skills.")).not.toBeInTheDocument();
+    expect(screen.getByText(/let's polish your summary/i)).toBeInTheDocument();
+  });
+
+  it("sends improvement chat messages through the optional callback", async () => {
+    const user = userEvent.setup();
+    const onSendMessage = vi.fn();
+    renderWorkspace({ onSendMessage });
+
+    await user.click(screen.getByRole("button", { name: /improve via chat/i }));
+    await user.click(screen.getByRole("button", { name: /^skills$/i }));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Make my React experience stronger." } });
+    await user.click(screen.getByRole("button", { name: /send message/i }));
+
+    expect(onSendMessage).toHaveBeenCalledWith({
+      body: "Make my React experience stronger.",
+      section: "skills",
+      attachmentName: null,
+    });
+  });
+
+  it("notifies the parent when switching improvement chat section chips", async () => {
+    const user = userEvent.setup();
+    const onOpenConversation = vi.fn();
+    renderWorkspace({ onOpenConversation });
+
+    await user.click(screen.getByRole("button", { name: /improve via chat/i }));
+    await user.click(screen.getByRole("button", { name: /^skills$/i }));
+
+    expect(onOpenConversation).toHaveBeenCalledWith("any");
+    expect(onOpenConversation).toHaveBeenCalledWith("skills");
+  });
+
+  it("notifies the parent when opening section-focused improvement chat", async () => {
+    const user = userEvent.setup();
+    const onOpenConversation = vi.fn();
+    renderWorkspace({ onOpenConversation });
+
+    await user.click(screen.getAllByRole("button", { name: /edit/i })[1]);
+    await user.click(screen.getByRole("button", { name: /talk to pal/i }));
+
+    expect(onOpenConversation).toHaveBeenCalledWith("summary");
   });
 
   it("saves edited basics through the profile patch callback and updates the hero", async () => {

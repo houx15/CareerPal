@@ -79,4 +79,39 @@ describe("Onboarding", () => {
 
     expect(screen.getByRole("status")).toHaveTextContent(/loading workspace/i);
   });
+
+  it("hydrates existing backend-shaped conversation messages instead of restarting the script", async () => {
+    renderOnboarding({
+      conversationMessages: [
+        { role: "assistant", content: "Welcome back. I found your latest resume." },
+        { role: "user", content: "I want to focus on product analytics roles." },
+      ],
+    });
+
+    expect(screen.getByText("Welcome back. I found your latest resume.")).toBeInTheDocument();
+    expect(screen.getByText("I want to focus on product analytics roles.")).toBeInTheDocument();
+    expect(screen.queryByText(/hi alex chen/i)).not.toBeInTheDocument();
+
+    await flushOnboardingPrompt();
+
+    expect(screen.queryByText(/first, what brings you here today/i)).not.toBeInTheDocument();
+  });
+
+  it("persists user sends through the optional callback and keeps scripted assistant replies", async () => {
+    const onSendMessage = vi.fn();
+    renderOnboarding({ onSendMessage });
+
+    fireEvent.change(screen.getByPlaceholderText(/attach your resume/i), {
+      target: { value: "I led onboarding analytics at Acme" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /send message/i }));
+
+    expect(onSendMessage).toHaveBeenCalledWith("I led onboarding analytics at Acme");
+
+    await act(async () => {
+      vi.advanceTimersByTime(1150);
+    });
+
+    expect(screen.getByText(/tell me about your most recent role/i)).toBeInTheDocument();
+  });
 });

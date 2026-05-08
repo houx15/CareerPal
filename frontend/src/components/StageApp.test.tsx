@@ -35,6 +35,8 @@ function apiMock() {
         education: "empty",
       },
     }),
+    listConversations: vi.fn().mockResolvedValue([]),
+    getConversation: vi.fn().mockResolvedValue({ id: "c1", context_type: "career", focus_node: null, messages: [] }),
     startConversation: vi.fn().mockResolvedValue({ id: "c1", context_type: "career", focus_node: null, messages: [] }),
     sendMessage: vi.fn().mockResolvedValue({
       assistant_message: {
@@ -103,6 +105,78 @@ describe("StageApp", () => {
     expect(await screen.findByText(/profile completion/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /my resume/i })).toBeInTheDocument();
     expect(screen.queryByText(/what should i call you/i)).not.toBeInTheDocument();
+  }, 10000);
+
+  it("reuses an existing general career conversation when loading the workspace", async () => {
+    const api = apiMock();
+    api.listConversations.mockResolvedValue([
+      { id: "existing-page", context_type: "page", focus_node: null, messages: [] },
+      {
+        id: "existing-career",
+        context_type: "career",
+        focus_node: null,
+        messages: [{ role: "assistant", content: "Welcome back. Want to keep shaping your profile?" }],
+      },
+    ]);
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+
+    await waitFor(() => expect(api.listConversations).toHaveBeenCalledTimes(1));
+    expect(api.getConversation).toHaveBeenCalledWith("existing-career");
+    expect(api.startConversation).not.toHaveBeenCalled();
+    expect(await screen.findByText(/profile completion/i)).toBeInTheDocument();
+  }, 10000);
+
+  it("starts a general career conversation before onboarding chat messages are sent", async () => {
+    const api = apiMock();
+    render(<StageApp api={api} />);
+
+    await reachOnboarding();
+
+    expect(api.startConversation).toHaveBeenCalledWith({ context_type: "career", focus_node: null });
+    await userEvent.click(screen.getByRole("button", { name: /i'm looking for a new job/i }));
+
+    await waitFor(() =>
+      expect(api.sendMessage).toHaveBeenCalledWith({
+        conversation_id: "c1",
+        content: "I'm looking for a new job",
+      }),
+    );
+  }, 10000);
+
+  it("starts and sends section-focused improvement chat through the focused conversation", async () => {
+    const api = apiMock();
+    api.startConversation.mockImplementation(async (payload) => ({
+      id: payload.focus_node === "summary" ? "summary-conversation" : "general-conversation",
+      context_type: "career",
+      focus_node: payload.focus_node ?? null,
+      messages: [],
+    }));
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+
+    await userEvent.click(await screen.findByRole("button", { name: /edit summary/i }));
+    await userEvent.click(screen.getByRole("button", { name: /talk to pal/i }));
+
+    await waitFor(() => expect(api.startConversation).toHaveBeenCalledWith({ context_type: "career", focus_node: "summary" }));
+
+    await userEvent.type(screen.getByRole("textbox"), "Make the summary more outcome-oriented.");
+    await userEvent.click(screen.getByRole("button", { name: /send message/i }));
+
+    await waitFor(() =>
+      expect(api.sendMessage).toHaveBeenCalledWith({
+        conversation_id: "summary-conversation",
+        content: "Make the summary more outcome-oriented.",
+      }),
+    );
   }, 10000);
 
   it("renders persisted experience after login", async () => {

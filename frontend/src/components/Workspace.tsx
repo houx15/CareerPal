@@ -1,6 +1,7 @@
 import type { CertificateItem, CompletenessState, EducationItem, ExperienceItem, ProjectItem, SkillItem } from "../lib/types";
 import type { ProfilePatch } from "../lib/types";
 import { Workspace as PrototypeWorkspace } from "./workspace/Workspace";
+import type { ImproveChatMessage, ImproveChatSendPayload, ImproveSection } from "./workspace/WorkspaceOverlays";
 
 export interface WorkspaceProfile {
   name: string | null;
@@ -27,9 +28,22 @@ interface WorkspaceProps {
   completeness: WorkspaceCompleteness;
   onLogout: () => void;
   onPatchProfile: (payload: ProfilePatch) => Promise<Partial<WorkspaceProfile>>;
+  conversationMessages?: ImproveChatMessage[];
+  conversationFocus?: ImproveSection | null;
+  onSendMessage?: (payload: ImproveChatSendPayload) => void | Promise<void>;
+  onOpenConversation?: (section: ImproveSection) => void;
 }
 
-export function Workspace({ profile, completeness, onLogout, onPatchProfile }: WorkspaceProps) {
+export function Workspace({
+  profile,
+  completeness,
+  onLogout,
+  onPatchProfile,
+  conversationMessages,
+  conversationFocus,
+  onSendMessage,
+  onOpenConversation,
+}: WorkspaceProps) {
   const name = profile.name || "CareerPal user";
 
   return (
@@ -55,6 +69,10 @@ export function Workspace({ profile, completeness, onLogout, onPatchProfile }: W
         certificates: profile.certificates,
       }}
       completeness={completeness}
+      conversationMessages={conversationMessages}
+      conversationFocus={conversationFocus}
+      onSendMessage={onSendMessage}
+      onOpenConversation={onOpenConversation}
       onLogout={onLogout}
       onPatchProfile={async (payload) => {
         const saved = await onPatchProfile(payload);

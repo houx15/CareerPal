@@ -7,7 +7,7 @@ import { LangToggle, useLang } from "../../i18n/LangProvider";
 import type { CertificateItem, CompletenessState, EducationItem, ExperienceItem, ProfilePatch, ProjectItem, SkillItem } from "../../lib/types";
 import { Slime } from "../Slime";
 import { ProfileDashboard, type ProfileSectionId } from "./ProfileDashboard";
-import { EditDrawer, ImproveChatOverlay } from "./WorkspaceOverlays";
+import { EditDrawer, ImproveChatOverlay, type ImproveChatMessage, type ImproveChatSendPayload, type ImproveSection } from "./WorkspaceOverlays";
 import { ResumeScreen } from "./ResumeScreen";
 import { MatchScreen } from "./MatchScreen";
 import { GrowScreen } from "./GrowScreen";
@@ -27,6 +27,10 @@ interface WorkspaceProps {
   profile?: ProfilePatch;
   completeness?: { sections: Record<string, CompletenessState> };
   onPatchProfile?: (payload: ProfilePatch) => Promise<ProfilePatch>;
+  conversationMessages?: ImproveChatMessage[];
+  conversationFocus?: ImproveSection | null;
+  onSendMessage?: (payload: ImproveChatSendPayload) => void | Promise<void>;
+  onOpenConversation?: (section: ImproveSection) => void;
 }
 
 type Tab = "profile" | "match" | "resume" | "grow" | "activity" | "settings";
@@ -39,7 +43,17 @@ const NAV: Array<{ id: Tab; label: CopyKey }> = [
   { id: "activity", label: "nav_activity" },
 ];
 
-export function Workspace({ user, onLogout, profile: persistedProfile, completeness, onPatchProfile }: WorkspaceProps) {
+export function Workspace({
+  user,
+  onLogout,
+  profile: persistedProfile,
+  completeness,
+  onPatchProfile,
+  conversationMessages,
+  conversationFocus,
+  onSendMessage,
+  onOpenConversation,
+}: WorkspaceProps) {
   const { t, lang } = useLang();
   const [tab, setTab] = useState<Tab>("profile");
   const [improveSection, setImproveSection] = useState<"any" | "basics" | "summary" | "experience" | "skills" | "projects" | "education" | "certificates" | null>(null);
@@ -188,8 +202,15 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
   );
 
   function openChatFromEdit(section: ProfileSectionId) {
+    const improveSection = section === "summarySec" ? "summary" : section;
     setEditSection(null);
-    setImproveSection(section === "summarySec" ? "summary" : section);
+    setImproveSection(improveSection);
+    onOpenConversation?.(improveSection);
+  }
+
+  function openImproveChat(section: ImproveSection) {
+    setImproveSection(section);
+    onOpenConversation?.(section);
   }
 
   async function patchProfile(payload: ProfilePatch): Promise<void> {
@@ -235,14 +256,23 @@ export function Workspace({ user, onLogout, profile: persistedProfile, completen
         </div>
       </header>
 
-      {tab === "profile" ? <ProfileDashboard profile={profile} onImprove={() => setImproveSection("any")} onSection={setEditSection} /> : null}
+      {tab === "profile" ? <ProfileDashboard profile={profile} onImprove={() => openImproveChat("any")} onSection={setEditSection} /> : null}
       {tab === "resume" ? <ResumeScreen profile={profile} onOpenMatch={() => setTab("match")} /> : null}
       {tab === "match" ? <MatchScreen profile={profile} /> : null}
       {tab === "grow" ? <GrowScreen /> : null}
       {tab === "activity" ? <ActivityScreen /> : null}
       {tab === "settings" ? <SettingsScreen onLogout={onLogout} /> : null}
 
-      {improveSection ? <ImproveChatOverlay user={user} initialSection={improveSection} onClose={() => setImproveSection(null)} /> : null}
+      {improveSection ? (
+        <ImproveChatOverlay
+          user={user}
+          initialSection={improveSection}
+          conversationMessages={conversationFocus === improveSection ? conversationMessages : undefined}
+          onSendMessage={onSendMessage}
+          onSectionChange={onOpenConversation}
+          onClose={() => setImproveSection(null)}
+        />
+      ) : null}
       {editSection ? (
         <EditDrawer section={editSection} profile={profile} onClose={() => setEditSection(null)} onChatInstead={openChatFromEdit} onSave={patchProfile} />
       ) : null}

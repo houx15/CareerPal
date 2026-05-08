@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CopyKey } from "../../i18n/copy";
 import { useLang } from "../../i18n/LangProvider";
 import type { DemoProfile } from "../../fixtures/careerpalDemoData";
@@ -9,6 +9,18 @@ import { Slime } from "../Slime";
 import type { ProfileSectionId } from "./ProfileDashboard";
 
 type ImproveSection = "any" | "basics" | "summary" | "experience" | "skills" | "projects" | "education" | "certificates";
+export type { ImproveSection };
+
+export interface ImproveChatMessage {
+  role: "ai" | "user";
+  body: string;
+}
+
+export interface ImproveChatSendPayload {
+  body: string;
+  section: ImproveSection;
+  attachmentName: string | null;
+}
 
 const IMPROVE_SECTIONS: Array<{ id: ImproveSection; label: CopyKey }> = [
   { id: "any", label: "improve_any" },
@@ -24,18 +36,35 @@ const IMPROVE_SECTIONS: Array<{ id: ImproveSection; label: CopyKey }> = [
 export function ImproveChatOverlay({
   user,
   initialSection = "any",
+  conversationMessages,
+  onSendMessage,
+  onSectionChange,
   onClose,
 }: {
   user: { initials: string };
   initialSection?: ImproveSection;
+  conversationMessages?: ImproveChatMessage[];
+  onSendMessage?: (payload: ImproveChatSendPayload) => void | Promise<void>;
+  onSectionChange?: (section: ImproveSection) => void;
   onClose: () => void;
 }) {
   const { t } = useLang();
   const [section, setSection] = useState<ImproveSection>(initialSection);
-  const [messages, setMessages] = useState([{ role: "ai", body: introFor(t, initialSection) }]);
+  const [messages, setMessages] = useState<ImproveChatMessage[]>(() =>
+    conversationMessages && conversationMessages.length > 0 ? conversationMessages : [{ role: "ai", body: introFor(t, initialSection) }],
+  );
   const [input, setInput] = useState("");
   const [attached, setAttached] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    setSection(initialSection);
+    setMessages(
+      conversationMessages && conversationMessages.length > 0
+        ? conversationMessages
+        : [{ role: "ai", body: introFor(t, initialSection) }],
+    );
+  }, [conversationMessages, initialSection, t]);
 
   function switchSection(nextSection: ImproveSection) {
     if (nextSection === section) {
@@ -43,6 +72,7 @@ export function ImproveChatOverlay({
     }
     setSection(nextSection);
     setMessages((current) => [...current, { role: "ai", body: introFor(t, nextSection) }]);
+    onSectionChange?.(nextSection);
   }
 
   function send() {
@@ -52,6 +82,7 @@ export function ImproveChatOverlay({
     }
 
     setMessages((current) => [...current, { role: "user", body: attached ? `${trimmed} · Attached: ${attached}` : trimmed }]);
+    void onSendMessage?.({ body: trimmed, section, attachmentName: attached });
     setInput("");
     setAttached(null);
   }

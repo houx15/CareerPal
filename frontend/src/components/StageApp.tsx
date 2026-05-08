@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { LangProvider } from "../i18n/LangProvider";
 import { ApiClient } from "../lib/api";
-import type { ProfilePatch } from "../lib/types";
+import type { Conversation, ConversationMessage, ProfilePatch } from "../lib/types";
 import { LoginScreen, NameIntro, SignUpScreen } from "./AuthScreens";
 import { IntroPage } from "./IntroPage";
 import { Onboarding } from "./Onboarding";
@@ -19,8 +19,14 @@ export interface StageApi {
   patchProfile(payload: ProfilePatch): Promise<Partial<WorkspaceProfile>>;
   getProfile(): Promise<WorkspaceProfile>;
   getCompleteness(): Promise<WorkspaceCompleteness>;
-  startConversation?(payload: { context_type: "career"; focus_node?: string | null }): Promise<unknown>;
-  sendMessage?(payload: { conversation_id: string; content: string }): Promise<unknown>;
+  listConversations?(): Promise<Conversation[]>;
+  getConversation?(id: string): Promise<Conversation>;
+  startConversation?(payload: { context_type: "career"; focus_node?: string | null }): Promise<Conversation>;
+  sendMessage?(payload: { conversation_id: string; content: string }): Promise<{
+    conversation_id: string;
+    assistant_message: ConversationMessage;
+    messages: ConversationMessage[];
+  }>;
 }
 
 interface StageAppProps {
@@ -29,6 +35,7 @@ interface StageAppProps {
 
 type Stage = "intro" | "login" | "signup" | "name" | "onboarding" | "workspace";
 type SessionUser = { name: string; initials: string; email: string };
+type ImproveSection = "any" | "basics" | "summary" | "experience" | "skills" | "projects" | "education" | "certificates";
 
 const TOKEN_KEY = "careerpal.accessToken";
 
@@ -45,6 +52,8 @@ function StageAppInner({ api }: StageAppProps) {
   const [profile, setProfile] = useState<WorkspaceProfile | null>(null);
   const [completeness, setCompleteness] = useState<WorkspaceCompleteness | null>(null);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [onboardingConversation, setOnboardingConversation] = useState<Conversation | null>(null);
+  const [improveConversation, setImproveConversation] = useState<Conversation | null>(null);
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
   const [pendingEmail, setPendingEmail] = useState("");
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
@@ -68,6 +77,8 @@ function StageAppInner({ api }: StageAppProps) {
 
   async function handleName(name: string) {
     await client.patchProfile({ name });
+    const conversation = await ensureCareerConversation(null);
+    setOnboardingConversation(conversation ?? null);
     setSessionUser({ name, initials: initialsForName(name), email: pendingEmail });
     setStage("onboarding");
   }
@@ -84,14 +95,18 @@ function StageAppInner({ api }: StageAppProps) {
     setWorkspaceError(null);
 
     try {
-      const [nextProfile, nextCompleteness] = await Promise.all([client.getProfile(), client.getCompleteness()]);
+      const [nextProfile, nextCompleteness, conversation] = await Promise.all([
+        client.getProfile(),
+        client.getCompleteness(),
+        ensureCareerConversation(null),
+      ]);
       if (workspaceRequestIdRef.current !== requestId) {
         return;
       }
 
       setProfile(nextProfile);
       setCompleteness(nextCompleteness);
-      await client.startConversation?.({ context_type: "career", focus_node: null });
+      setOnboardingConversation(conversation ?? null);
       if (workspaceRequestIdRef.current !== requestId) {
         return;
       }
@@ -113,6 +128,8 @@ function StageAppInner({ api }: StageAppProps) {
     storeToken(null);
     setProfile(null);
     setCompleteness(null);
+    setOnboardingConversation(null);
+    setImproveConversation(null);
     setPendingEmail("");
     setSessionUser(null);
     setIsLoadingWorkspace(false);
@@ -127,6 +144,69 @@ function StageAppInner({ api }: StageAppProps) {
     setProfile((current) => (current ? { ...current, ...saved } : current));
     setCompleteness(nextCompleteness);
     return saved;
+  }
+
+  async function ensureCareerConversation(focusNode: string | null): Promise<Conversation | undefined> {
+    if (onboardingConversation && (onboardingConversation.focus_node ?? null) === focusNode) {
+      return onboardingConversation;
+    }
+
+    if (client.listConversations && client.getConversation) {
+      const conversations = await client.listConversations();
+      const existing = conversations.find(
+        (conversation) =>
+          conversation.context_type === "career" &&
+          (conversation.focus_node ?? null) === focusNode,
+      );
+
+      if (existing) {
+        return client.getConversation(existing.id);
+      }
+    }
+
+    return client.startConversation?.({ context_type: "career", focus_node: focusNode });
+  }
+
+  async function handleOnboardingMessage(content: string | ConversationMessage): Promise<void> {
+    if (!onboardingConversation || !client.sendMessage) {
+      return;
+    }
+
+    const messageContent = typeof content === "string" ? content : content.content;
+    const response = await client.sendMessage({ conversation_id: onboardingConversation.id, content: messageContent });
+    setOnboardingConversation((current) =>
+      current && current.id === onboardingConversation.id ? { ...current, messages: response.messages } : current,
+    );
+  }
+
+  async function handleOpenImproveConversation(section: ImproveSection): Promise<void> {
+    const conversation = await ensureCareerConversation(focusNodeForImproveSection(section));
+    setImproveConversation(conversation ?? null);
+  }
+
+  async function handleImproveMessage(payload: {
+    body: string;
+    section: ImproveSection;
+    attachmentName: string | null;
+  }): Promise<void> {
+    if (!client.sendMessage) {
+      return;
+    }
+
+    const focusNode = focusNodeForImproveSection(payload.section);
+    const conversation = improveConversation && (improveConversation.focus_node ?? null) === focusNode
+      ? improveConversation
+      : await ensureCareerConversation(focusNode);
+
+    if (!conversation) {
+      return;
+    }
+
+    const content = payload.attachmentName
+      ? [payload.body, `Attached: ${payload.attachmentName}`].filter(Boolean).join(" · ")
+      : payload.body;
+    const response = await client.sendMessage({ conversation_id: conversation.id, content });
+    setImproveConversation({ ...conversation, messages: response.messages });
   }
 
   if (stage === "intro") {
@@ -165,6 +245,8 @@ function StageAppInner({ api }: StageAppProps) {
         <Onboarding
           user={sessionUser ?? { name: "CareerPal user", initials: "CU", email: pendingEmail }}
           isLoading={isLoadingWorkspace}
+          conversationMessages={onboardingConversation?.messages}
+          onSendMessage={handleOnboardingMessage}
           onDone={loadWorkspace}
         />
         {workspaceError ? <p className="floating-error">{workspaceError}</p> : null}
@@ -176,7 +258,33 @@ function StageAppInner({ api }: StageAppProps) {
     return null;
   }
 
-  return <Workspace profile={profile} completeness={completeness} onLogout={handleLogout} onPatchProfile={handlePatchProfile} />;
+  return (
+    <Workspace
+      profile={profile}
+      completeness={completeness}
+      conversationMessages={improveConversation ? toImproveMessages(improveConversation.messages) : undefined}
+      conversationFocus={improveConversation ? improveSectionForFocusNode(improveConversation.focus_node) : null}
+      onSendMessage={handleImproveMessage}
+      onOpenConversation={handleOpenImproveConversation}
+      onLogout={handleLogout}
+      onPatchProfile={handlePatchProfile}
+    />
+  );
+}
+
+function focusNodeForImproveSection(section: ImproveSection): string | null {
+  return section === "any" ? null : section;
+}
+
+function improveSectionForFocusNode(focusNode: string | null | undefined): ImproveSection {
+  return focusNode === null || focusNode === undefined ? "any" : (focusNode as ImproveSection);
+}
+
+function toImproveMessages(messages: ConversationMessage[]): Array<{ role: "ai" | "user"; body: string }> {
+  return messages.map((message) => ({
+    role: message.role === "assistant" ? "ai" : "user",
+    body: message.content,
+  }));
 }
 
 export function defaultApiBaseUrl(): string {
