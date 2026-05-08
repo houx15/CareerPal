@@ -20,6 +20,10 @@ export function ResumeScreen({
   pageError,
   onGeneratePage,
   onCustomizePage,
+  isUpdatingPageVisibility = false,
+  onPublishPage,
+  onUnpublishPage,
+  onOpenPublicPage,
   onOpenMatch,
 }: {
   profile: DemoProfile;
@@ -29,6 +33,10 @@ export function ResumeScreen({
   pageError?: string | null;
   onGeneratePage?: (styleTemplate: PageStyleTemplate) => void | Promise<void>;
   onCustomizePage?: (instruction: string) => void | Promise<void>;
+  isUpdatingPageVisibility?: boolean;
+  onPublishPage?: () => void | Promise<void>;
+  onUnpublishPage?: () => void | Promise<void>;
+  onOpenPublicPage?: (url: string) => void;
   onOpenMatch: () => void;
 }) {
   const [selectedTemplate, setSelectedTemplate] = useState<PageStyleTemplate>(generatedPage?.style_template ?? "clean-professional");
@@ -52,6 +60,10 @@ export function ResumeScreen({
     }
   }
 
+  function publicPageUrl(): string {
+    return generatedPage?.public_url || `/p/${profile.handle}`;
+  }
+
   return (
     <div className="page-pad" data-screen-label="06 My resume">
       <div className="page-head">
@@ -71,6 +83,30 @@ export function ResumeScreen({
               <button className="btn btn-ghost btn-sm" type="button" onClick={() => setCustomizing(true)}>
                 Edit page
               </button>
+              {generatedPage.is_public ? (
+                <>
+                  <button className="btn btn-accent btn-sm" type="button" onClick={() => onOpenPublicPage?.(publicPageUrl())}>
+                    Open page
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    type="button"
+                    disabled={isUpdatingPageVisibility || isGeneratingPage}
+                    onClick={() => onUnpublishPage?.()}
+                  >
+                    Unpublish
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="btn btn-accent btn-sm"
+                  type="button"
+                  disabled={isUpdatingPageVisibility || isGeneratingPage}
+                  onClick={() => onPublishPage?.()}
+                >
+                  Publish
+                </button>
+              )}
             </div>
           ) : null}
         </div>

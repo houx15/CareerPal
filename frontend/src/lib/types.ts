@@ -173,9 +173,14 @@ export interface GeneratedPage {
   version: number;
   is_public: boolean;
   created_at: string;
+  public_url?: string | null;
 }
 
 export interface CustomizePagePayload {
   conversation_id: string;
   instruction: string;
+}
+
+export interface PageSettingsPayload {
+  is_public: boolean;
 }

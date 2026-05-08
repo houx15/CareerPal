@@ -35,6 +35,7 @@ export interface WorkspaceCompleteness {
 interface WorkspaceProps {
   profile: WorkspaceProfile;
   completeness: WorkspaceCompleteness;
+  accountUsername?: string;
   onLogout: () => void;
   onPatchProfile: (payload: ProfilePatch) => Promise<Partial<WorkspaceProfile>>;
   conversationMessages?: ImproveChatMessage[];
@@ -47,11 +48,16 @@ interface WorkspaceProps {
   pageError?: string | null;
   onGeneratePage?: (styleTemplate: PageStyleTemplate) => void | Promise<void>;
   onCustomizePage?: (instruction: string) => void | Promise<void>;
+  isUpdatingPageVisibility?: boolean;
+  onPublishPage?: () => void | Promise<void>;
+  onUnpublishPage?: () => void | Promise<void>;
+  onOpenPublicPage?: (url: string) => void;
 }
 
 export function Workspace({
   profile,
   completeness,
+  accountUsername,
   onLogout,
   onPatchProfile,
   conversationMessages,
@@ -64,6 +70,10 @@ export function Workspace({
   pageError,
   onGeneratePage,
   onCustomizePage,
+  isUpdatingPageVisibility,
+  onPublishPage,
+  onUnpublishPage,
+  onOpenPublicPage,
 }: WorkspaceProps) {
   const name = profile.name || "CareerPal user";
 
@@ -73,7 +83,7 @@ export function Workspace({
         name,
         initials: initialsForName(name),
         email: "",
-        handle: usernameFromName(name),
+        handle: accountUsername ?? usernameFromName(name),
       }}
       profile={{
         name: profile.name,
@@ -100,6 +110,10 @@ export function Workspace({
       pageError={pageError}
       onGeneratePage={onGeneratePage}
       onCustomizePage={onCustomizePage}
+      isUpdatingPageVisibility={isUpdatingPageVisibility}
+      onPublishPage={onPublishPage}
+      onUnpublishPage={onUnpublishPage}
+      onOpenPublicPage={onOpenPublicPage}
       onLogout={onLogout}
       onPatchProfile={async (payload) => {
         const saved = await onPatchProfile(payload);

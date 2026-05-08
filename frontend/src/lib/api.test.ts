@@ -254,6 +254,33 @@ describe("ApiClient", () => {
     });
   });
 
+  it.each([true, false])("updates generated page public setting to %s with bearer auth", async (isPublic) => {
+    const page = {
+      id: "page-1",
+      html_content: "<!doctype html><html><body>Alex Chen</body></html>",
+      style_template: "clean-professional",
+      version: 1,
+      is_public: isPublic,
+      created_at: "2026-05-08T00:00:00Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "Content-Type": "application/json" }),
+      json: async () => page,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.updatePageSettings({ is_public: isPublic });
+
+    expect(result).toEqual(page);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/page/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token-123" },
+      body: JSON.stringify({ is_public: isPublic }),
+    });
+  });
+
   it("gets one conversation with bearer auth", async () => {
     const conversation = {
       id: "conversation-1",

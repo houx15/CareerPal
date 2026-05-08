@@ -47,6 +47,10 @@ interface WorkspaceProps {
   pageError?: string | null;
   onGeneratePage?: (styleTemplate: PageStyleTemplate) => void | Promise<void>;
   onCustomizePage?: (instruction: string) => void | Promise<void>;
+  isUpdatingPageVisibility?: boolean;
+  onPublishPage?: () => void | Promise<void>;
+  onUnpublishPage?: () => void | Promise<void>;
+  onOpenPublicPage?: (url: string) => void;
 }
 
 type Tab = "profile" | "match" | "resume" | "grow" | "activity" | "settings";
@@ -75,6 +79,10 @@ export function Workspace({
   pageError,
   onGeneratePage,
   onCustomizePage,
+  isUpdatingPageVisibility,
+  onPublishPage,
+  onUnpublishPage,
+  onOpenPublicPage,
 }: WorkspaceProps) {
   const { t, lang } = useLang();
   const [tab, setTab] = useState<Tab>("profile");
@@ -288,6 +296,10 @@ export function Workspace({
           pageError={pageError}
           onGeneratePage={onGeneratePage}
           onCustomizePage={onCustomizePage}
+          isUpdatingPageVisibility={isUpdatingPageVisibility}
+          onPublishPage={onPublishPage}
+          onUnpublishPage={onUnpublishPage}
+          onOpenPublicPage={onOpenPublicPage}
           onOpenMatch={() => setTab("match")}
         />
       ) : null}

@@ -1,8 +1,10 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../lib/api";
 import { defaultApiBaseUrl, StageApp } from "./StageApp";
+
+const originalApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 function apiMock() {
   return {
@@ -63,10 +65,27 @@ function apiMock() {
       is_public: false,
       created_at: "2026-05-08T00:01:00Z",
     }),
+    updatePageSettings: vi.fn().mockImplementation(async (payload: { is_public: boolean }) => ({
+      id: "page-1",
+      html_content: "<!doctype html><html><body><h1>Alex Chen</h1></body></html>",
+      style_template: "clean-professional",
+      version: 1,
+      is_public: payload.is_public,
+      created_at: "2026-05-08T00:00:00Z",
+    })),
   };
 }
 
 describe("StageApp", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    if (originalApiBaseUrl === undefined) {
+      delete process.env.NEXT_PUBLIC_API_BASE_URL;
+    } else {
+      process.env.NEXT_PUBLIC_API_BASE_URL = originalApiBaseUrl;
+    }
+  });
+
   it("uses same-origin API requests by default", () => {
     expect(defaultApiBaseUrl()).toBe("");
   });
@@ -246,6 +265,84 @@ describe("StageApp", () => {
 
     expect(await screen.findByText("Page customization failed")).toBeInTheDocument();
     expect(input).toHaveValue("Make projects more prominent.");
+  }, 10000);
+
+  it("publishes and unpublishes the loaded generated page", async () => {
+    const api = apiMock();
+    api.getPagePreview.mockResolvedValue({
+      id: "page-1",
+      html_content: "<!doctype html><html><body><h1>Alex Chen</h1></body></html>",
+      style_template: "clean-professional",
+      version: 1,
+      is_public: false,
+      created_at: "2026-05-08T00:00:00Z",
+    });
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /my resume/i }));
+
+    expect(screen.getByRole("button", { name: /publish/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /open page/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /publish/i }));
+
+    await waitFor(() => expect(api.updatePageSettings).toHaveBeenCalledWith({ is_public: true }));
+    expect(await screen.findByRole("button", { name: /open page/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /unpublish/i }));
+
+    await waitFor(() => expect(api.updatePageSettings).toHaveBeenCalledWith({ is_public: false }));
+    expect(await screen.findByRole("button", { name: /publish/i })).toBeInTheDocument();
+  }, 10000);
+
+  it("keeps public page state intact when unpublish fails", async () => {
+    const api = apiMock();
+    api.getPagePreview.mockResolvedValue({
+      id: "page-1",
+      html_content: "<!doctype html><html><body><h1>Alex Chen</h1></body></html>",
+      style_template: "clean-professional",
+      version: 1,
+      is_public: true,
+      created_at: "2026-05-08T00:00:00Z",
+    });
+    api.updatePageSettings.mockRejectedValue(new Error("Could not update page settings."));
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /my resume/i }));
+    await userEvent.click(screen.getByRole("button", { name: /unpublish/i }));
+
+    expect(await screen.findByText("Could not update page settings.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open page/i })).toBeInTheDocument();
+  }, 10000);
+
+  it("opens the public page with the auth username and configured API base URL", async () => {
+    process.env.NEXT_PUBLIC_API_BASE_URL = "http://localhost:8000";
+    const openMock = vi.spyOn(window, "open").mockImplementation(() => null);
+    const api = apiMock();
+    api.getPagePreview.mockResolvedValue({
+      id: "page-1",
+      html_content: "<!doctype html><html><body><h1>Alex Chen</h1></body></html>",
+      style_template: "clean-professional",
+      version: 1,
+      is_public: true,
+      created_at: "2026-05-08T00:00:00Z",
+    });
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /my resume/i }));
+    await userEvent.click(screen.getByRole("button", { name: /open page/i }));
+
+    expect(openMock).toHaveBeenCalledWith("http://localhost:8000/p/alex", "_blank", "noopener,noreferrer");
   }, 10000);
 
   it("reuses an existing general career conversation when loading the workspace", async () => {

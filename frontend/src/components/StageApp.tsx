@@ -12,6 +12,7 @@ import type {
   ProfilePatch,
   ResumeStructureResponse,
   ResumeUploadResponse,
+  PageSettingsPayload,
 } from "../lib/types";
 import { LoginScreen, NameIntro, SignUpScreen } from "./AuthScreens";
 import { IntroPage } from "./IntroPage";
@@ -21,6 +22,7 @@ import { Workspace, type WorkspaceCompleteness, type WorkspaceProfile } from "./
 type AuthPayload = { email: string; username: string; password: string };
 type LoginPayload = { email: string; password: string };
 type AuthResult = { access_token: string; user: { id: string; email: string; username: string } };
+type AccountUser = AuthResult["user"];
 
 export interface StageApi {
   register(payload: AuthPayload): Promise<AuthResult>;
@@ -41,6 +43,7 @@ export interface StageApi {
   getPagePreview?(): Promise<GeneratedPage>;
   generatePage?(styleTemplate: PageStyleTemplate): Promise<GeneratedPage>;
   customizePage?(payload: CustomizePagePayload): Promise<GeneratedPage>;
+  updatePageSettings?(payload: PageSettingsPayload): Promise<GeneratedPage>;
 }
 
 interface StageAppProps {
@@ -71,10 +74,12 @@ function StageAppInner({ api }: StageAppProps) {
   const [pageConversation, setPageConversation] = useState<Conversation | null>(null);
   const [generatedPage, setGeneratedPage] = useState<GeneratedPage | null>(null);
   const [isGeneratingPage, setIsGeneratingPage] = useState(false);
+  const [isUpdatingPageVisibility, setIsUpdatingPageVisibility] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
   const [pendingEmail, setPendingEmail] = useState("");
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
+  const [accountUser, setAccountUser] = useState<AccountUser | null>(null);
   const isLoadingWorkspaceRef = useRef(false);
   const workspaceRequestIdRef = useRef(0);
 
@@ -85,6 +90,7 @@ function StageAppInner({ api }: StageAppProps) {
       action === "register" ? await client.register(payload as AuthPayload) : await client.login(payload as LoginPayload);
     storeToken(result.access_token);
     setPendingEmail(result.user.email);
+    setAccountUser(result.user);
     if (action === "register") {
       setStage("name");
       return;
@@ -153,9 +159,11 @@ function StageAppInner({ api }: StageAppProps) {
     setPageConversation(null);
     setGeneratedPage(null);
     setIsGeneratingPage(false);
+    setIsUpdatingPageVisibility(false);
     setPageError(null);
     setPendingEmail("");
     setSessionUser(null);
+    setAccountUser(null);
     setIsLoadingWorkspace(false);
     isLoadingWorkspaceRef.current = false;
     workspaceRequestIdRef.current += 1;
@@ -339,6 +347,31 @@ function StageAppInner({ api }: StageAppProps) {
     }
   }
 
+  async function updatePageVisibility(isPublic: boolean): Promise<void> {
+    if (!client.updatePageSettings) {
+      return;
+    }
+
+    setIsUpdatingPageVisibility(true);
+    setPageError(null);
+
+    try {
+      setGeneratedPage(await client.updatePageSettings({ is_public: isPublic }));
+    } catch (caught) {
+      setPageError(caught instanceof Error ? caught.message : "Could not update page settings.");
+    } finally {
+      setIsUpdatingPageVisibility(false);
+    }
+  }
+
+  function handleOpenPublicPage(url: string): void {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+
   if (stage === "intro") {
     return <IntroPage onGetStarted={() => setStage("signup")} onSignIn={() => setStage("login")} />;
   }
@@ -390,20 +423,34 @@ function StageAppInner({ api }: StageAppProps) {
     return null;
   }
 
+  const publicUsername =
+    accountUser?.username ?? (pendingEmail ? usernameFromEmail(pendingEmail) : usernameFromName(profile.name || "CareerPal user"));
+  const generatedPageForWorkspace = generatedPage
+    ? {
+        ...generatedPage,
+        public_url: generatedPage.public_url ?? publicPageUrlForUsername(publicUsername),
+      }
+    : null;
+
   return (
     <Workspace
       profile={profile}
       completeness={completeness}
+      accountUsername={accountUser?.username}
       conversationMessages={improveConversation ? toImproveMessages(improveConversation.messages) : undefined}
       conversationFocus={improveConversation ? improveSectionForFocusNode(improveConversation.focus_node) : null}
       onSendMessage={handleImproveMessage}
       onOpenConversation={handleOpenImproveConversation}
-      generatedPage={generatedPage}
+      generatedPage={generatedPageForWorkspace}
       pageConversationMessages={pageConversation ? toImproveMessages(pageConversation.messages) : undefined}
       isGeneratingPage={isGeneratingPage}
+      isUpdatingPageVisibility={isUpdatingPageVisibility}
       pageError={pageError}
       onGeneratePage={handleGeneratePage}
       onCustomizePage={handleCustomizePage}
+      onPublishPage={() => updatePageVisibility(true)}
+      onUnpublishPage={() => updatePageVisibility(false)}
+      onOpenPublicPage={handleOpenPublicPage}
       onLogout={handleLogout}
       onPatchProfile={handlePatchProfile}
     />
@@ -457,6 +504,16 @@ function storeToken(nextToken: string | null) {
 function usernameFromEmail(email: string): string {
   const prefix = email.split("@")[0] || "user";
   return prefix.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "") || "user";
+}
+
+function usernameFromName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 24) || "careerpal";
+}
+
+function publicPageUrlForUsername(username: string): string {
+  const path = `/p/${username}`;
+  const baseUrl = defaultApiBaseUrl().replace(/\/$/, "");
+  return baseUrl ? `${baseUrl}${path}` : path;
 }
 
 function initialsForName(name: string): string {

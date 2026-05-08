@@ -25,6 +25,10 @@ class CustomizePageRequest(BaseModel):
         return stripped
 
 
+class PageSettingsRequest(BaseModel):
+    is_public: bool
+
+
 class GeneratedPagePreview(BaseModel):
     id: str
     html_content: str

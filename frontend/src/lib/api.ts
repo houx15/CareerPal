@@ -4,6 +4,7 @@ import type {
   GeneratedPage,
   Conversation,
   LoginPayload,
+  PageSettingsPayload,
   Profile,
   ProfileCompleteness,
   ProfilePatch,
@@ -101,6 +102,10 @@ export class ApiClient {
 
   customizePage(payload: CustomizePagePayload): Promise<GeneratedPage> {
     return this.request("/api/page/customize", { method: "POST", body: payload, auth: true });
+  }
+
+  updatePageSettings(payload: PageSettingsPayload): Promise<GeneratedPage> {
+    return this.request("/api/page/settings", { method: "PATCH", body: payload, auth: true });
   }
 
   private async request<T>(

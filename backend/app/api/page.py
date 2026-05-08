@@ -19,6 +19,7 @@ from app.schemas.page import (
     GeneratedPagePreview,
     GeneratedPageVersion,
     GeneratedPageVersionsResponse,
+    PageSettingsRequest,
 )
 from app.services.llm import build_llm_client
 from app.services.page_generation import (
@@ -138,6 +139,29 @@ def get_page_versions(
         .order_by(desc(GeneratedPage.version), desc(GeneratedPage.created_at))
     ).scalars()
     return GeneratedPageVersionsResponse(versions=[_page_version(page) for page in pages])
+
+
+@router.patch("/settings", response_model=GeneratedPagePreview)
+def update_page_settings(
+    payload: PageSettingsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> GeneratedPagePreview:
+    page = _latest_generated_page(db, current_user)
+    if page is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No generated page found")
+
+    pages = db.execute(select(GeneratedPage).where(GeneratedPage.user_id == current_user.id)).scalars().all()
+    for candidate in pages:
+        candidate.is_public = False
+
+    if payload.is_public:
+        page.is_public = True
+
+    db.add_all(pages)
+    db.commit()
+    db.refresh(page)
+    return _page_preview(page)
 
 
 def _latest_generated_page(db: Session, current_user: User) -> GeneratedPage | None:

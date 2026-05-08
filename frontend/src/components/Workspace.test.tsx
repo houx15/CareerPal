@@ -14,8 +14,12 @@ function renderWorkspace({
   generatedPage,
   pageConversationMessages,
   isGeneratingPage,
+  isUpdatingPageVisibility,
   onGeneratePage,
   onCustomizePage,
+  onPublishPage,
+  onUnpublishPage,
+  onOpenPublicPage,
 }: {
   profile?: Parameters<typeof Workspace>[0]["profile"];
   completeness?: Parameters<typeof Workspace>[0]["completeness"];
@@ -26,8 +30,12 @@ function renderWorkspace({
   generatedPage?: Parameters<typeof Workspace>[0]["generatedPage"];
   pageConversationMessages?: Parameters<typeof Workspace>[0]["pageConversationMessages"];
   isGeneratingPage?: Parameters<typeof Workspace>[0]["isGeneratingPage"];
+  isUpdatingPageVisibility?: Parameters<typeof Workspace>[0]["isUpdatingPageVisibility"];
   onGeneratePage?: Parameters<typeof Workspace>[0]["onGeneratePage"];
   onCustomizePage?: Parameters<typeof Workspace>[0]["onCustomizePage"];
+  onPublishPage?: Parameters<typeof Workspace>[0]["onPublishPage"];
+  onUnpublishPage?: Parameters<typeof Workspace>[0]["onUnpublishPage"];
+  onOpenPublicPage?: Parameters<typeof Workspace>[0]["onOpenPublicPage"];
 } = {}) {
   const onPatchProfile = vi.fn();
   render(
@@ -45,8 +53,12 @@ function renderWorkspace({
         generatedPage={generatedPage}
         pageConversationMessages={pageConversationMessages}
         isGeneratingPage={isGeneratingPage}
+        isUpdatingPageVisibility={isUpdatingPageVisibility}
         onGeneratePage={onGeneratePage}
         onCustomizePage={onCustomizePage}
+        onPublishPage={onPublishPage}
+        onUnpublishPage={onUnpublishPage}
+        onOpenPublicPage={onOpenPublicPage}
       />
     </LangProvider>,
   );
@@ -275,6 +287,94 @@ describe("Workspace", () => {
 
     expect(screen.getByRole("textbox", { name: /page customization request/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /send page request/i })).toBeDisabled();
+  });
+
+  it("publishes a private generated page from the living resume actions", async () => {
+    const user = userEvent.setup();
+    const onPublishPage = vi.fn().mockResolvedValue(undefined);
+    renderWorkspace({
+      generatedPage: {
+        id: "page-1",
+        html_content: "<!doctype html><html><body><h1>Alex Chen</h1></body></html>",
+        style_template: "clean-professional",
+        version: 2,
+        is_public: false,
+        created_at: "2026-05-08T00:00:00Z",
+      },
+      onPublishPage,
+    });
+
+    await user.click(screen.getByRole("button", { name: /my resume/i }));
+    expect(screen.queryByRole("button", { name: /open page/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /publish/i }));
+
+    expect(onPublishPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens and unpublishes a public generated page", async () => {
+    const user = userEvent.setup();
+    const onOpenPublicPage = vi.fn();
+    const onUnpublishPage = vi.fn().mockResolvedValue(undefined);
+    renderWorkspace({
+      generatedPage: {
+        id: "page-1",
+        html_content: "<!doctype html><html><body><h1>Alex Chen</h1></body></html>",
+        style_template: "clean-professional",
+        version: 2,
+        is_public: true,
+        public_url: "/p/alex",
+        created_at: "2026-05-08T00:00:00Z",
+      },
+      onOpenPublicPage,
+      onUnpublishPage,
+    });
+
+    await user.click(screen.getByRole("button", { name: /my resume/i }));
+    await user.click(screen.getByRole("button", { name: /open page/i }));
+    await user.click(screen.getByRole("button", { name: /unpublish/i }));
+
+    expect(onOpenPublicPage).toHaveBeenCalledWith("/p/alex");
+    expect(onUnpublishPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to the profile handle when opening a public page without a URL", async () => {
+    const user = userEvent.setup();
+    const onOpenPublicPage = vi.fn();
+    renderWorkspace({
+      generatedPage: {
+        id: "page-1",
+        html_content: "<!doctype html><html><body><h1>Alex Chen</h1></body></html>",
+        style_template: "clean-professional",
+        version: 2,
+        is_public: true,
+        created_at: "2026-05-08T00:00:00Z",
+      },
+      onOpenPublicPage,
+    });
+
+    await user.click(screen.getByRole("button", { name: /my resume/i }));
+    await user.click(screen.getByRole("button", { name: /open page/i }));
+
+    expect(onOpenPublicPage).toHaveBeenCalledWith("/p/alex");
+  });
+
+  it("disables publish controls while page visibility updates", async () => {
+    const user = userEvent.setup();
+    renderWorkspace({
+      generatedPage: {
+        id: "page-1",
+        html_content: "<!doctype html><html><body><h1>Alex Chen</h1></body></html>",
+        style_template: "clean-professional",
+        version: 2,
+        is_public: false,
+        created_at: "2026-05-08T00:00:00Z",
+      },
+      isUpdatingPageVisibility: true,
+    });
+
+    await user.click(screen.getByRole("button", { name: /my resume/i }));
+
+    expect(screen.getByRole("button", { name: /publish/i })).toBeDisabled();
   });
 
   it("saves edited basics through the profile patch callback and updates the hero", async () => {
