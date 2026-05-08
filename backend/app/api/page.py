@@ -1,7 +1,7 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import desc, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -27,6 +27,7 @@ from app.services.page_generation import (
     generate_page_html,
     validate_page_html,
 )
+from app.services.pdf_export import render_profile_pdf, resume_filename
 
 router = APIRouter(prefix="/page", tags=["page"])
 MAX_PAGE_VERSION_ATTEMPTS = 3
@@ -139,6 +140,21 @@ def get_page_versions(
         .order_by(desc(GeneratedPage.version), desc(GeneratedPage.created_at))
     ).scalars()
     return GeneratedPageVersionsResponse(versions=[_page_version(page) for page in pages])
+
+
+@router.get("/export/pdf")
+def export_page_pdf(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Response:
+    profile = _current_profile(current_user, db)
+    profile_payload = _profile_response(profile)
+    pdf = render_profile_pdf(profile_payload)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{resume_filename(profile_payload)}"'},
+    )
 
 
 @router.patch("/settings", response_model=GeneratedPagePreview)

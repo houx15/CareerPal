@@ -44,6 +44,7 @@ export interface StageApi {
   generatePage?(styleTemplate: PageStyleTemplate): Promise<GeneratedPage>;
   customizePage?(payload: CustomizePagePayload): Promise<GeneratedPage>;
   updatePageSettings?(payload: PageSettingsPayload): Promise<GeneratedPage>;
+  exportProfilePdf?(): Promise<Blob>;
 }
 
 interface StageAppProps {
@@ -75,6 +76,7 @@ function StageAppInner({ api }: StageAppProps) {
   const [generatedPage, setGeneratedPage] = useState<GeneratedPage | null>(null);
   const [isGeneratingPage, setIsGeneratingPage] = useState(false);
   const [isUpdatingPageVisibility, setIsUpdatingPageVisibility] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
   const [pendingEmail, setPendingEmail] = useState("");
@@ -160,6 +162,7 @@ function StageAppInner({ api }: StageAppProps) {
     setGeneratedPage(null);
     setIsGeneratingPage(false);
     setIsUpdatingPageVisibility(false);
+    setIsExportingPdf(false);
     setPageError(null);
     setPendingEmail("");
     setSessionUser(null);
@@ -364,12 +367,39 @@ function StageAppInner({ api }: StageAppProps) {
     }
   }
 
+  async function handleDownloadPdf(): Promise<void> {
+    if (!client.exportProfilePdf) {
+      return;
+    }
+
+    setIsExportingPdf(true);
+    setPageError(null);
+
+    try {
+      const pdf = await client.exportProfilePdf();
+      const url = URL.createObjectURL(pdf);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `careerpal-${exportUsername()}.pdf`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (caught) {
+      setPageError(caught instanceof Error ? caught.message : "Could not export PDF.");
+    } finally {
+      setIsExportingPdf(false);
+    }
+  }
+
   function handleOpenPublicPage(url: string): void {
     if (typeof window === "undefined") {
       return;
     }
 
     window.open(url, "_blank", "noopener,noreferrer");
+  }
+
+  function exportUsername(): string {
+    return accountUser?.username ?? (pendingEmail ? usernameFromEmail(pendingEmail) : usernameFromName(profile?.name || "CareerPal user"));
   }
 
   if (stage === "intro") {
@@ -444,9 +474,11 @@ function StageAppInner({ api }: StageAppProps) {
       generatedPage={generatedPageForWorkspace}
       pageConversationMessages={pageConversation ? toImproveMessages(pageConversation.messages) : undefined}
       isGeneratingPage={isGeneratingPage}
+      isExportingPdf={isExportingPdf}
       isUpdatingPageVisibility={isUpdatingPageVisibility}
       pageError={pageError}
       onGeneratePage={handleGeneratePage}
+      onExportPdf={handleDownloadPdf}
       onCustomizePage={handleCustomizePage}
       onPublishPage={() => updatePageVisibility(true)}
       onUnpublishPage={() => updatePageVisibility(false)}

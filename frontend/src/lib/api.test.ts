@@ -281,6 +281,24 @@ describe("ApiClient", () => {
     });
   });
 
+  it("exports the structured profile PDF with bearer auth", async () => {
+    const pdf = new Blob(["%PDF-1.7"], { type: "application/pdf" });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "Content-Type": "application/pdf" }),
+      blob: async () => pdf,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.exportProfilePdf();
+
+    expect(result).toBe(pdf);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/page/export/pdf", {
+      headers: { Authorization: "Bearer token-123" },
+    });
+  });
+
   it("gets one conversation with bearer auth", async () => {
     const conversation = {
       id: "conversation-1",

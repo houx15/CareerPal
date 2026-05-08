@@ -108,6 +108,34 @@ export class ApiClient {
     return this.request("/api/page/settings", { method: "PATCH", body: payload, auth: true });
   }
 
+  exportProfilePdf(): Promise<Blob> {
+    return this.requestBlob("/api/page/export/pdf", { auth: true });
+  }
+
+  private async requestBlob(
+    path: string,
+    options: { method?: string; auth?: boolean } = {},
+  ): Promise<Blob> {
+    const headers: Record<string, string> = {};
+
+    const token = options.auth ? this.getToken() : null;
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+
+    const response = await this.fetcher(this.url(path), {
+      ...(options.method ? { method: options.method } : {}),
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
+    });
+
+    if (!response.ok) {
+      const error = await this.errorPayload(response);
+      throw new ApiError(response.status, error.message, error.detail);
+    }
+
+    return response.blob();
+  }
+
   private async request<T>(
     path: string,
     options: { method?: string; body?: unknown; formData?: FormData; auth?: boolean } = {},

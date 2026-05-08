@@ -17,8 +17,10 @@ export function ResumeScreen({
   generatedPage,
   pageConversationMessages,
   isGeneratingPage = false,
+  isExportingPdf = false,
   pageError,
   onGeneratePage,
+  onExportPdf,
   onCustomizePage,
   isUpdatingPageVisibility = false,
   onPublishPage,
@@ -30,8 +32,10 @@ export function ResumeScreen({
   generatedPage?: GeneratedPage | null;
   pageConversationMessages?: PageChatMessage[];
   isGeneratingPage?: boolean;
+  isExportingPdf?: boolean;
   pageError?: string | null;
   onGeneratePage?: (styleTemplate: PageStyleTemplate) => void | Promise<void>;
+  onExportPdf?: () => void | Promise<void>;
   onCustomizePage?: (instruction: string) => void | Promise<void>;
   isUpdatingPageVisibility?: boolean;
   onPublishPage?: () => void | Promise<void>;
@@ -140,9 +144,14 @@ export function ResumeScreen({
         {pageError ? <div className="form-error">{pageError}</div> : null}
         <div className="resume-site-foot">
           <div className="resume-site-url">careerpal.co/{profile.handle}</div>
-          <button className="btn btn-accent" type="button" disabled={isGeneratingPage} onClick={generate}>
-            {generatedPage ? "Regenerate page" : isGeneratingPage ? "Creating..." : "Create my page"}
-          </button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-ghost" type="button" disabled={isExportingPdf} onClick={() => onExportPdf?.()}>
+              Download PDF
+            </button>
+            <button className="btn btn-accent" type="button" disabled={isGeneratingPage} onClick={generate}>
+              {generatedPage ? "Regenerate page" : isGeneratingPage ? "Creating..." : "Create my page"}
+            </button>
+          </div>
         </div>
       </section>
       {customizing ? (

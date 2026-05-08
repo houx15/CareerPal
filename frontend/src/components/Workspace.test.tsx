@@ -14,12 +14,14 @@ function renderWorkspace({
   generatedPage,
   pageConversationMessages,
   isGeneratingPage,
+  isExportingPdf,
   isUpdatingPageVisibility,
   onGeneratePage,
   onCustomizePage,
   onPublishPage,
   onUnpublishPage,
   onOpenPublicPage,
+  onExportPdf,
 }: {
   profile?: Parameters<typeof Workspace>[0]["profile"];
   completeness?: Parameters<typeof Workspace>[0]["completeness"];
@@ -30,12 +32,14 @@ function renderWorkspace({
   generatedPage?: Parameters<typeof Workspace>[0]["generatedPage"];
   pageConversationMessages?: Parameters<typeof Workspace>[0]["pageConversationMessages"];
   isGeneratingPage?: Parameters<typeof Workspace>[0]["isGeneratingPage"];
+  isExportingPdf?: Parameters<typeof Workspace>[0]["isExportingPdf"];
   isUpdatingPageVisibility?: Parameters<typeof Workspace>[0]["isUpdatingPageVisibility"];
   onGeneratePage?: Parameters<typeof Workspace>[0]["onGeneratePage"];
   onCustomizePage?: Parameters<typeof Workspace>[0]["onCustomizePage"];
   onPublishPage?: Parameters<typeof Workspace>[0]["onPublishPage"];
   onUnpublishPage?: Parameters<typeof Workspace>[0]["onUnpublishPage"];
   onOpenPublicPage?: Parameters<typeof Workspace>[0]["onOpenPublicPage"];
+  onExportPdf?: Parameters<typeof Workspace>[0]["onExportPdf"];
 } = {}) {
   const onPatchProfile = vi.fn();
   render(
@@ -53,12 +57,14 @@ function renderWorkspace({
         generatedPage={generatedPage}
         pageConversationMessages={pageConversationMessages}
         isGeneratingPage={isGeneratingPage}
+        isExportingPdf={isExportingPdf}
         isUpdatingPageVisibility={isUpdatingPageVisibility}
         onGeneratePage={onGeneratePage}
         onCustomizePage={onCustomizePage}
         onPublishPage={onPublishPage}
         onUnpublishPage={onUnpublishPage}
         onOpenPublicPage={onOpenPublicPage}
+        onExportPdf={onExportPdf}
       />
     </LangProvider>,
   );
@@ -208,6 +214,25 @@ describe("Workspace", () => {
     await user.click(screen.getByRole("button", { name: /create my page/i }));
 
     expect(onGeneratePage).toHaveBeenCalledWith("technical");
+  });
+
+  it("exports a PDF from the living resume screen", async () => {
+    const user = userEvent.setup();
+    const onExportPdf = vi.fn().mockResolvedValue(undefined);
+    renderWorkspace({ onExportPdf });
+
+    await user.click(screen.getByRole("button", { name: /my resume/i }));
+    await user.click(screen.getByRole("button", { name: /download pdf/i }));
+
+    expect(onExportPdf).toHaveBeenCalled();
+  });
+
+  it("disables the PDF export action while an export is running", async () => {
+    renderWorkspace({ isExportingPdf: true });
+
+    await userEvent.click(screen.getByRole("button", { name: /my resume/i }));
+
+    expect(screen.getByRole("button", { name: /download pdf/i })).toBeDisabled();
   });
 
   it("renders an existing generated page preview and customizes it through page workflow", async () => {

@@ -73,6 +73,7 @@ function apiMock() {
       is_public: payload.is_public,
       created_at: "2026-05-08T00:00:00Z",
     })),
+    exportProfilePdf: vi.fn().mockResolvedValue(new Blob(["%PDF-1.7"], { type: "application/pdf" })),
   };
 }
 
@@ -343,6 +344,50 @@ describe("StageApp", () => {
     await userEvent.click(screen.getByRole("button", { name: /open page/i }));
 
     expect(openMock).toHaveBeenCalledWith("http://localhost:8000/p/alex", "_blank", "noopener,noreferrer");
+  }, 10000);
+
+  it("downloads the exported PDF from the resume screen", async () => {
+    const createObjectUrl = vi.fn().mockReturnValue("blob:careerpal-pdf");
+    const revokeObjectUrl = vi.fn();
+    const clickMock = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    const originalCreateObjectURL = URL.createObjectURL;
+    const originalRevokeObjectURL = URL.revokeObjectURL;
+    URL.createObjectURL = createObjectUrl;
+    URL.revokeObjectURL = revokeObjectUrl;
+    const api = apiMock();
+    render(<StageApp api={api} />);
+
+    try {
+      await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+      await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+      await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+      await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+      await userEvent.click(await screen.findByRole("button", { name: /my resume/i }));
+      await userEvent.click(screen.getByRole("button", { name: /download pdf/i }));
+
+      await waitFor(() => expect(api.exportProfilePdf).toHaveBeenCalled());
+      expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
+      expect(clickMock).toHaveBeenCalled();
+      expect(revokeObjectUrl).toHaveBeenCalledWith("blob:careerpal-pdf");
+    } finally {
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+    }
+  }, 10000);
+
+  it("shows an export error when PDF download fails", async () => {
+    const api = apiMock();
+    api.exportProfilePdf.mockRejectedValue(new Error("Could not download PDF."));
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /my resume/i }));
+    await userEvent.click(screen.getByRole("button", { name: /download pdf/i }));
+
+    expect(await screen.findByText("Could not download PDF.")).toBeInTheDocument();
   }, 10000);
 
   it("reuses an existing general career conversation when loading the workspace", async () => {

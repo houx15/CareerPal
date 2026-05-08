@@ -44,8 +44,10 @@ interface WorkspaceProps {
   generatedPage?: GeneratedPage | null;
   pageConversationMessages?: Array<{ role: "ai" | "user"; body: string }>;
   isGeneratingPage?: boolean;
+  isExportingPdf?: boolean;
   pageError?: string | null;
   onGeneratePage?: (styleTemplate: PageStyleTemplate) => void | Promise<void>;
+  onExportPdf?: () => void | Promise<void>;
   onCustomizePage?: (instruction: string) => void | Promise<void>;
   isUpdatingPageVisibility?: boolean;
   onPublishPage?: () => void | Promise<void>;
@@ -76,8 +78,10 @@ export function Workspace({
   generatedPage,
   pageConversationMessages,
   isGeneratingPage,
+  isExportingPdf,
   pageError,
   onGeneratePage,
+  onExportPdf,
   onCustomizePage,
   isUpdatingPageVisibility,
   onPublishPage,
@@ -293,8 +297,10 @@ export function Workspace({
           generatedPage={generatedPage}
           pageConversationMessages={pageConversationMessages}
           isGeneratingPage={isGeneratingPage}
+          isExportingPdf={isExportingPdf}
           pageError={pageError}
           onGeneratePage={onGeneratePage}
+          onExportPdf={onExportPdf}
           onCustomizePage={onCustomizePage}
           isUpdatingPageVisibility={isUpdatingPageVisibility}
           onPublishPage={onPublishPage}
