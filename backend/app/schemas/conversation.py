@@ -37,3 +37,4 @@ class ConversationMessageResponse(BaseModel):
     conversation_id: str
     assistant_message: ConversationMessage
     messages: list[ConversationMessage]
+    extraction_diff: dict | None = None

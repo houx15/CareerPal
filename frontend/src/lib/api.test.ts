@@ -135,6 +135,11 @@ describe("ApiClient", () => {
         content: "Let's shape that internship story into a stronger project bullet.",
         timestamp: "2026-05-08T00:01:00Z",
       },
+      extraction_diff: {
+        profile: {
+          headline: { before: null, after: "Backend SWE intern" },
+        },
+      },
       messages: [
         {
           role: "user",
@@ -170,6 +175,11 @@ describe("ApiClient", () => {
     });
 
     expect(result).toEqual(donePayload);
+    expect(result.extraction_diff).toEqual({
+      profile: {
+        headline: { before: null, after: "Backend SWE intern" },
+      },
+    });
     expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/conversation/message", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer token-123" },

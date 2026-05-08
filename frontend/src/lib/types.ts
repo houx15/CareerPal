@@ -138,4 +138,5 @@ export interface SendMessageResponse {
   conversation_id: string;
   assistant_message: ConversationMessage;
   messages: ConversationMessage[];
+  extraction_diff?: Record<string, unknown> | null;
 }

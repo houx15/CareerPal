@@ -92,6 +92,220 @@ def test_message_streams_delta_done_payload_and_persists_messages(client):
     assert persisted["messages"] == body["messages"]
 
 
+def test_career_message_extracts_explicit_profile_updates_and_returns_diff(client):
+    headers = auth_headers(client)
+    conversation = client.post("/api/conversation/start", headers=headers, json={"context_type": "career"}).json()
+
+    response = client.post(
+        "/api/conversation/message",
+        headers=headers,
+        json={
+            "conversation_id": conversation["id"],
+            "content": (
+                "My headline is Backend SWE intern. "
+                "My target direction is Platform engineering. "
+                "My location is Austin, TX."
+            ),
+        },
+    )
+
+    assert response.status_code == 200
+    done = [event for event in parse_sse_events(response) if event["event"] == "done"][0]["data"]
+    assert done["extraction_diff"] == {
+        "profile": {
+            "headline": {"before": None, "after": "Backend SWE intern"},
+            "target_direction": {"before": None, "after": "Platform engineering"},
+            "location": {"before": None, "after": "Austin, TX"},
+        }
+    }
+
+    profile = client.get("/api/profile", headers=headers).json()
+    assert profile["headline"] == "Backend SWE intern"
+    assert profile["target_direction"] == "Platform engineering"
+    assert profile["location"] == "Austin, TX"
+
+
+def test_career_extraction_leaves_unstated_profile_fields_unchanged(client):
+    headers = auth_headers(client)
+    client.patch(
+        "/api/profile",
+        headers=headers,
+        json={
+            "headline": "Original headline",
+            "target_direction": "Data engineering",
+            "location": "Boston, MA",
+            "phone": "555-0100",
+            "contact_email": "alex.public@example.com",
+            "comment": "Interested in reliable systems.",
+        },
+    )
+    conversation = client.post("/api/conversation/start", headers=headers, json={"context_type": "career"}).json()
+
+    response = client.post(
+        "/api/conversation/message",
+        headers=headers,
+        json={"conversation_id": conversation["id"], "content": "My headline is Backend SWE intern."},
+    )
+
+    assert response.status_code == 200
+    done = [event for event in parse_sse_events(response) if event["event"] == "done"][0]["data"]
+    assert done["extraction_diff"] == {
+        "profile": {
+            "headline": {"before": "Original headline", "after": "Backend SWE intern"},
+        }
+    }
+
+    profile = client.get("/api/profile", headers=headers).json()
+    assert profile["headline"] == "Backend SWE intern"
+    assert profile["target_direction"] == "Data engineering"
+    assert profile["location"] == "Boston, MA"
+    assert profile["phone"] == "555-0100"
+    assert profile["contact_email"] == "alex.public@example.com"
+    assert profile["comment"] == "Interested in reliable systems."
+
+
+def test_career_extraction_bounds_scalar_values_and_ignores_non_update_mentions(client):
+    headers = auth_headers(client)
+    conversation = client.post("/api/conversation/start", headers=headers, json={"context_type": "career"}).json()
+
+    response = client.post(
+        "/api/conversation/message",
+        headers=headers,
+        json={
+            "conversation_id": conversation["id"],
+            "content": (
+                "My headline is Backend SWE intern. "
+                "I like infrastructure. "
+                "Location is less important than remote fit. "
+                "My phone is off during class. "
+                "123 students attended the demo."
+            ),
+        },
+    )
+
+    assert response.status_code == 200
+    done = [event for event in parse_sse_events(response) if event["event"] == "done"][0]["data"]
+    assert done["extraction_diff"] == {
+        "profile": {
+            "headline": {"before": None, "after": "Backend SWE intern"},
+        }
+    }
+
+    profile = client.get("/api/profile", headers=headers).json()
+    assert profile["headline"] == "Backend SWE intern"
+    assert profile["location"] is None
+    assert profile["phone"] is None
+
+
+def test_career_message_extracts_straightforward_contact_and_comment_fields(client):
+    headers = auth_headers(client)
+    conversation = client.post("/api/conversation/start", headers=headers, json={"context_type": "career"}).json()
+
+    response = client.post(
+        "/api/conversation/message",
+        headers=headers,
+        json={
+            "conversation_id": conversation["id"],
+            "content": (
+                "My contact email is alex.public@example.com. "
+                "My phone number is 555-0100. "
+                "My summary is I like building reliable internal tools."
+            ),
+        },
+    )
+
+    assert response.status_code == 200
+    done = [event for event in parse_sse_events(response) if event["event"] == "done"][0]["data"]
+    assert done["extraction_diff"] == {
+        "profile": {
+            "contact_email": {"before": None, "after": "alex.public@example.com"},
+            "phone": {"before": None, "after": "555-0100"},
+            "comment": {"before": None, "after": "I like building reliable internal tools"},
+        }
+    }
+
+    profile = client.get("/api/profile", headers=headers).json()
+    assert profile["contact_email"] == "alex.public@example.com"
+    assert profile["phone"] == "555-0100"
+    assert profile["comment"] == "I like building reliable internal tools"
+
+
+def test_page_message_does_not_extract_profile_updates(client):
+    headers = auth_headers(client)
+    conversation = client.post("/api/conversation/start", headers=headers, json={"context_type": "page"}).json()
+
+    response = client.post(
+        "/api/conversation/message",
+        headers=headers,
+        json={
+            "conversation_id": conversation["id"],
+            "content": "My headline is Backend SWE intern. My location is Austin, TX.",
+        },
+    )
+
+    assert response.status_code == 200
+    done = [event for event in parse_sse_events(response) if event["event"] == "done"][0]["data"]
+    assert "extraction_diff" not in done
+
+    profile = client.get("/api/profile", headers=headers).json()
+    assert profile["headline"] is None
+    assert profile["location"] is None
+
+
+def test_provider_failure_does_not_extract_profile_updates(client, monkeypatch):
+    class FailingLLMClient:
+        async def stream_chat(self, messages):
+            yield "Partial response"
+            raise LLMProviderError("LLM provider error: overloaded")
+
+    monkeypatch.setattr(conversation_api, "build_llm_client", lambda settings: FailingLLMClient())
+    headers = auth_headers(client)
+    conversation = client.post("/api/conversation/start", headers=headers, json={"context_type": "career"}).json()
+
+    response = client.post(
+        "/api/conversation/message",
+        headers=headers,
+        json={
+            "conversation_id": conversation["id"],
+            "content": "My headline is Backend SWE intern. My location is Austin, TX.",
+        },
+    )
+
+    assert response.status_code == 200
+    assert [event["event"] for event in parse_sse_events(response)] == ["message", "error"]
+
+    profile = client.get("/api/profile", headers=headers).json()
+    assert profile["headline"] is None
+    assert profile["location"] is None
+
+
+def test_extraction_failure_does_not_rollback_successful_assistant_message(client, monkeypatch):
+    def fail_extraction(db, user_id, user_text):
+        raise RuntimeError("extractor failed")
+
+    monkeypatch.setattr(conversation_api, "apply_profile_extraction", fail_extraction)
+    headers = auth_headers(client)
+    conversation = client.post("/api/conversation/start", headers=headers, json={"context_type": "career"}).json()
+
+    response = client.post(
+        "/api/conversation/message",
+        headers=headers,
+        json={"conversation_id": conversation["id"], "content": "My headline is Backend SWE intern."},
+    )
+
+    assert response.status_code == 200
+    events = parse_sse_events(response)
+    assert [event["event"] for event in events][-1] == "done"
+    assert "extraction_diff" not in events[-1]["data"]
+
+    persisted = client.get(f"/api/conversation/{conversation['id']}", headers=headers).json()
+    assert persisted["messages"][-2]["content"] == "My headline is Backend SWE intern."
+    assert persisted["messages"][-1]["role"] == "assistant"
+    assert persisted["messages"][-1]["content"] == "I noted that. Tell me one concrete impact or result from that experience."
+    profile = client.get("/api/profile", headers=headers).json()
+    assert profile["headline"] is None
+
+
 def test_message_prompt_includes_current_profile_context(client, monkeypatch):
     captured_messages = []
 

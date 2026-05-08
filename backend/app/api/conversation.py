@@ -19,6 +19,7 @@ from app.schemas.conversation import (
     ConversationResponse,
     ConversationStartRequest,
 )
+from app.services.extraction import apply_profile_extraction
 from app.services.llm import LLMMessage, LLMProviderError, build_llm_client
 
 router = APIRouter(prefix="/conversation", tags=["conversation"])
@@ -206,6 +207,8 @@ def _llm_messages(conversation: Conversation, user_content: str, current_user: U
 def _append_assistant_message(
     session_factory: sessionmaker,
     conversation_id: str,
+    user_id: str,
+    user_content: str,
     assistant_message: dict,
 ) -> ConversationMessageResponse:
     db = session_factory()
@@ -217,10 +220,22 @@ def _append_assistant_message(
         db.add(conversation)
         db.commit()
         db.refresh(conversation)
+
+        extraction_diff = None
+        if conversation.context_type == "career":
+            try:
+                extraction_diff = apply_profile_extraction(db, user_id, user_content)
+                if extraction_diff:
+                    db.commit()
+            except Exception:
+                db.rollback()
+                extraction_diff = None
+
         return ConversationMessageResponse(
             conversation_id=conversation.id,
             assistant_message=assistant_message,
             messages=conversation.messages,
+            extraction_diff=extraction_diff,
         )
     finally:
         db.close()
@@ -249,6 +264,7 @@ def send_message(
     db.add(conversation)
     db.commit()
     conversation_id = conversation.id
+    user_id = current_user.id
     session_factory = sessionmaker(bind=db.get_bind(), autoflush=False, autocommit=False)
 
     async def stream():
@@ -273,8 +289,10 @@ def send_message(
             _append_assistant_message,
             session_factory,
             conversation_id,
+            user_id,
+            payload.content,
             assistant_message,
         )
-        yield f"event: done\ndata: {done_payload.model_dump_json()}\n\n"
+        yield f"event: done\ndata: {done_payload.model_dump_json(exclude_none=True)}\n\n"
 
     return StreamingResponse(stream(), media_type="text/event-stream")
