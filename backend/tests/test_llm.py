@@ -6,6 +6,20 @@ from app.core.config import Settings
 from app.services.llm import LLMMessage, LLMProviderError, build_llm_client
 
 
+def production_llm_settings(**overrides):
+    values = {
+        "environment": "production",
+        "secret_key": "prod-secret",
+        "resume_storage_provider": "oss",
+        "oss_endpoint": "https://oss-cn-hangzhou.aliyuncs.com",
+        "oss_bucket": "careerpal-bucket",
+        "oss_access_key_id": "test-access-key",
+        "oss_access_key_secret": "test-secret",
+    }
+    values.update(overrides)
+    return Settings(**values)
+
+
 def test_fake_llm_provider_is_valid_without_secrets():
     settings = Settings(environment="test", llm_provider="fake", llm_model_name="careerpal-fake")
 
@@ -17,7 +31,7 @@ def test_fake_llm_provider_is_valid_without_secrets():
 
 def test_production_llm_config_requires_api_key_and_model_for_real_provider():
     with pytest.raises(ValidationError) as exc_info:
-        Settings(environment="production", llm_provider="openai", secret_key="prod-secret")
+        production_llm_settings(llm_provider="openai")
 
     assert "llm_api_key must be configured" in str(exc_info.value)
     assert "llm_model_name must be configured" in str(exc_info.value)
@@ -58,9 +72,7 @@ async def test_openai_adapter_posts_streaming_chat_completion_shape():
         yield "data: [DONE]"
 
     client = build_llm_client(
-        Settings(
-            environment="production",
-            secret_key="prod-secret",
+        production_llm_settings(
             llm_provider="openai",
             llm_base_url="https://llm.example/v1",
             llm_model_name="career-model",
@@ -92,9 +104,7 @@ async def test_anthropic_adapter_posts_streaming_messages_shape():
         yield "event: message_stop"
 
     client = build_llm_client(
-        Settings(
-            environment="production",
-            secret_key="prod-secret",
+        production_llm_settings(
             llm_provider="anthropic",
             llm_base_url="https://anthropic.example/v1",
             llm_model_name="claude-career",
@@ -150,9 +160,7 @@ async def test_openai_adapter_yields_first_chunk_before_transport_finishes():
         yield "data: [DONE]"
 
     client = build_llm_client(
-        Settings(
-            environment="production",
-            secret_key="prod-secret",
+        production_llm_settings(
             llm_provider="openai",
             llm_base_url="https://llm.example/v1",
             llm_model_name="career-model",
@@ -178,9 +186,7 @@ async def test_openai_adapter_raises_provider_error_from_stream_event():
         yield 'data: {"error":{"message":"rate limited"}}'
 
     client = build_llm_client(
-        Settings(
-            environment="production",
-            secret_key="prod-secret",
+        production_llm_settings(
             llm_provider="openai",
             llm_base_url="https://llm.example/v1",
             llm_model_name="career-model",
@@ -203,9 +209,7 @@ async def test_openai_adapter_ignores_empty_choice_stream_chunks():
         yield "data: [DONE]"
 
     client = build_llm_client(
-        Settings(
-            environment="production",
-            secret_key="prod-secret",
+        production_llm_settings(
             llm_provider="openai",
             llm_base_url="https://llm.example/v1",
             llm_model_name="career-model",
@@ -226,9 +230,7 @@ async def test_anthropic_adapter_raises_provider_error_from_stream_event():
         yield 'data: {"error":{"message":"overloaded"}}'
 
     client = build_llm_client(
-        Settings(
-            environment="production",
-            secret_key="prod-secret",
+        production_llm_settings(
             llm_provider="anthropic",
             llm_base_url="https://anthropic.example/v1",
             llm_model_name="claude-career",

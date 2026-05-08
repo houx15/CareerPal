@@ -1,7 +1,5 @@
 from datetime import datetime, timezone
 from pathlib import Path
-import tempfile
-import zipfile
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import select
@@ -22,6 +20,12 @@ from app.schemas.resume import (
 )
 from app.services.llm import LLMProviderError, build_llm_client
 from app.services.resume_extraction import ResumeExtractionError, extract_resume_text
+from app.services.resume_storage import (
+    StorageConfigurationError,
+    build_resume_storage,
+    make_resume_object_key,
+    validate_and_copy_resume_to_temp,
+)
 from app.services.resume_structuring import ResumeStructureError, apply_resume_structure, structure_resume_text
 
 router = APIRouter(prefix="/resume", tags=["resume"])
@@ -40,32 +44,44 @@ async def upload_resume(
 ) -> ResumeUploadResponse:
     settings = get_settings()
     suffix = _validated_resume_suffix(file)
-    storage_root = Path(settings.resume_storage_dir)
-    user_dir = storage_root / current_user.id
-    storage_path = user_dir / f"{new_uuid()}{suffix}"
-    size_bytes = await store_validated_resume(
+    resume_id = new_uuid()
+    object_key = make_resume_object_key(current_user.id, resume_id, suffix)
+    temp_path, size_bytes = await validate_and_copy_resume_to_temp(
         file,
-        storage_path,
         max_upload_bytes=settings.resume_max_upload_bytes,
         suffix=suffix,
     )
+    stored_path = None
     try:
-        parsed_text = extract_resume_text(storage_path, file.content_type or "")
-        parse_error = None
-        parsed_at = datetime.now(timezone.utc)
-        upload_status = "parsed"
-    except ResumeExtractionError as exc:
-        parsed_text = None
-        parse_error = str(exc)
-        parsed_at = None
-        upload_status = "parse_failed"
+        try:
+            storage = build_resume_storage(settings)
+        except StorageConfigurationError as exc:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        try:
+            parsed_text = extract_resume_text(temp_path, file.content_type or "")
+            parse_error = None
+            parsed_at = datetime.now(timezone.utc)
+            upload_status = "parsed"
+        except ResumeExtractionError as exc:
+            parsed_text = None
+            parse_error = str(exc)
+            parsed_at = None
+            upload_status = "parse_failed"
+        try:
+            stored_path = storage.save(temp_path, object_key)
+        except StorageConfigurationError as exc:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+    finally:
+        if temp_path.exists():
+            temp_path.unlink()
 
     resume_file = ResumeFile(
+        id=resume_id,
         user_id=current_user.id,
         original_filename=file.filename or f"resume{suffix}",
         content_type=file.content_type or "",
         size_bytes=size_bytes,
-        storage_path=str(storage_path),
+        storage_path=stored_path,
         status=upload_status,
         parsed_text=parsed_text,
         parse_error=parse_error,
@@ -78,8 +94,8 @@ async def upload_resume(
         db.commit()
     except Exception:
         db.rollback()
-        if storage_path.exists():
-            storage_path.unlink()
+        if stored_path:
+            storage.delete(stored_path)
         raise
     return ResumeUploadResponse(
         id=resume_file.id,
@@ -228,48 +244,15 @@ def _validated_resume_suffix(file: UploadFile) -> str:
 
 
 async def store_validated_resume(file, storage_path: Path, max_upload_bytes: int, suffix: str) -> int:
-    total_bytes = 0
-    temp_path = None
+    temp_path, size_bytes = await validate_and_copy_resume_to_temp(
+        file,
+        max_upload_bytes=max_upload_bytes,
+        suffix=suffix,
+    )
     try:
-        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-            temp_path = Path(temp_file.name)
-            while True:
-                chunk = await file.read(64 * 1024)
-                if not chunk:
-                    break
-                total_bytes += len(chunk)
-                if total_bytes > max_upload_bytes:
-                    raise HTTPException(
-                        status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                        detail="Resume file is too large",
-                    )
-                temp_file.write(chunk)
-
-        if total_bytes == 0:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Resume file is empty")
-        if not _has_valid_resume_content(temp_path, suffix):
-            raise HTTPException(
-                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-                detail="Unsupported resume file type. Upload a valid PDF or DOCX file.",
-            )
-
         storage_path.parent.mkdir(parents=True, exist_ok=True)
         temp_path.replace(storage_path)
-        temp_path = None
-        return total_bytes
+        return size_bytes
     finally:
-        if temp_path is not None and temp_path.exists():
+        if temp_path.exists():
             temp_path.unlink()
-
-
-def _has_valid_resume_content(path: Path, suffix: str) -> bool:
-    if suffix == ".pdf":
-        return path.read_bytes()[:5] == b"%PDF-"
-    if suffix == ".docx":
-        try:
-            with zipfile.ZipFile(path) as archive:
-                names = set(archive.namelist())
-        except zipfile.BadZipFile:
-            return False
-        return "[Content_Types].xml" in names and "word/document.xml" in names
-    return False

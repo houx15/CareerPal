@@ -15,8 +15,13 @@ class Settings(BaseSettings):
     llm_base_url: str | None = None
     llm_model_name: str | None = "careerpal-fake"
     llm_api_key: str | None = None
+    resume_storage_provider: str = "local"
     resume_storage_dir: str = "./storage/resumes"
     resume_max_upload_bytes: int = 5 * 1024 * 1024
+    oss_endpoint: str | None = None
+    oss_bucket: str | None = None
+    oss_access_key_id: str | None = None
+    oss_access_key_secret: str | None = None
     cors_origins: list[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
@@ -26,9 +31,18 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="CAREERPAL_", env_file=".env", extra="ignore")
 
-    @field_validator("llm_base_url", "llm_model_name", "llm_api_key", mode="before")
+    @field_validator(
+        "llm_base_url",
+        "llm_model_name",
+        "llm_api_key",
+        "oss_endpoint",
+        "oss_bucket",
+        "oss_access_key_id",
+        "oss_access_key_secret",
+        mode="before",
+    )
     @classmethod
-    def empty_llm_setting_to_none(cls, value):
+    def empty_optional_setting_to_none(cls, value):
         if isinstance(value, str) and not value.strip():
             return None
         return value
@@ -49,6 +63,23 @@ class Settings(BaseSettings):
             if not self.llm_model_name or self.llm_model_name == "careerpal-fake":
                 missing.append("llm_model_name must be configured")
             if missing:
+                raise ValueError("; ".join(missing))
+        allowed_storage_providers = {"local", "oss"}
+        if self.resume_storage_provider not in allowed_storage_providers:
+            raise ValueError("resume_storage_provider must be one of: local, oss")
+        if self.environment not in {"local", "test"} and self.resume_storage_provider != "oss":
+            raise ValueError("resume_storage_provider must be oss outside local and test environments")
+        if self.resume_storage_provider == "oss":
+            missing = []
+            if not self.oss_endpoint:
+                missing.append("oss_endpoint must be configured")
+            if not self.oss_bucket:
+                missing.append("oss_bucket must be configured")
+            if not self.oss_access_key_id:
+                missing.append("oss_access_key_id must be configured")
+            if not self.oss_access_key_secret:
+                missing.append("oss_access_key_secret must be configured")
+            if missing and self.environment not in {"local", "test"}:
                 raise ValueError("; ".join(missing))
         return self
 

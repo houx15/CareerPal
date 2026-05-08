@@ -63,9 +63,24 @@ def make_docx_bytes_with_text(text: str, table_text: str | None = None) -> bytes
 
 def configure_resume_storage(monkeypatch, storage_dir, max_upload_bytes=None):
     monkeypatch.setenv("CAREERPAL_RESUME_STORAGE_DIR", str(storage_dir))
+    monkeypatch.setenv("CAREERPAL_RESUME_STORAGE_PROVIDER", "local")
     if max_upload_bytes is not None:
         monkeypatch.setenv("CAREERPAL_RESUME_MAX_UPLOAD_BYTES", str(max_upload_bytes))
     get_settings.cache_clear()
+
+
+class RecordingResumeStorage:
+    def __init__(self):
+        self.saved: list[tuple[Path, str, bytes]] = []
+        self.deleted: list[str] = []
+
+    def save(self, source_path: Path, object_key: str) -> str:
+        content = source_path.read_bytes()
+        self.saved.append((source_path, object_key, content))
+        return f"oss://careerpal-bucket/{object_key}"
+
+    def delete(self, storage_path: str) -> None:
+        self.deleted.append(storage_path)
 
 
 def test_extracts_text_from_pdf_fixture(tmp_path):
@@ -119,6 +134,57 @@ def test_authenticated_user_can_upload_pdf_resume(client, db_session, tmp_path, 
     assert stored_path.exists()
     assert stored_path.read_bytes() == content
     assert stored_path.is_relative_to(tmp_path / "resumes")
+
+
+def test_resume_upload_uses_oss_storage_key_in_oss_mode(client, db_session, tmp_path, monkeypatch):
+    configure_resume_storage(monkeypatch, tmp_path / "unused-local-resumes")
+    monkeypatch.setenv("CAREERPAL_RESUME_STORAGE_PROVIDER", "oss")
+    monkeypatch.setenv("CAREERPAL_OSS_ENDPOINT", "https://oss-cn-hangzhou.aliyuncs.com")
+    monkeypatch.setenv("CAREERPAL_OSS_BUCKET", "careerpal-bucket")
+    monkeypatch.setenv("CAREERPAL_OSS_ACCESS_KEY_ID", "test-access-key")
+    monkeypatch.setenv("CAREERPAL_OSS_ACCESS_KEY_SECRET", "test-secret")
+    get_settings.cache_clear()
+    recording_storage = RecordingResumeStorage()
+    monkeypatch.setattr(resume_api, "build_resume_storage", lambda settings: recording_storage)
+    headers = auth_headers(client)
+    content = make_pdf_bytes("Alex Chen OSS resume")
+
+    response = client.post(
+        "/api/resume/upload",
+        headers=headers,
+        files={"file": ("resume.pdf", content, "application/pdf")},
+    )
+
+    assert response.status_code == 201
+    resume_file = db_session.get(ResumeFile, response.json()["id"])
+    assert resume_file is not None
+    assert len(recording_storage.saved) == 1
+    _source_path, object_key, saved_content = recording_storage.saved[0]
+    assert object_key.startswith(f"resumes/{resume_file.user_id}/")
+    assert object_key.endswith(".pdf")
+    assert saved_content == content
+    assert resume_file.storage_path == f"oss://careerpal-bucket/{object_key}"
+    assert not (tmp_path / "unused-local-resumes").exists()
+
+
+def test_resume_upload_returns_clear_error_for_incomplete_oss_config(client, db_session, tmp_path, monkeypatch):
+    configure_resume_storage(monkeypatch, tmp_path / "unused-local-resumes")
+    monkeypatch.setenv("CAREERPAL_RESUME_STORAGE_PROVIDER", "oss")
+    monkeypatch.setenv("CAREERPAL_OSS_BUCKET", "careerpal-bucket")
+    monkeypatch.setenv("CAREERPAL_OSS_ACCESS_KEY_SECRET", "test-secret")
+    get_settings.cache_clear()
+    headers = auth_headers(client)
+
+    response = client.post(
+        "/api/resume/upload",
+        headers=headers,
+        files={"file": ("resume.pdf", make_pdf_bytes("Alex Chen OSS resume"), "application/pdf")},
+    )
+
+    assert response.status_code == 500
+    assert "Missing OSS configuration" in response.json()["detail"]
+    assert not (tmp_path / "unused-local-resumes").exists()
+    assert db_session.query(ResumeFile).count() == 0
 
 
 def test_resume_upload_requires_authentication(client):
@@ -539,6 +605,60 @@ def test_resume_upload_removes_stored_file_when_db_commit_fails(client, tmp_path
     assert failing_db.rolled_back is True
     assert stored_paths
     assert not stored_paths[0].exists()
+
+
+def test_resume_upload_deletes_oss_object_when_db_commit_fails(client, tmp_path, monkeypatch):
+    configure_resume_storage(monkeypatch, tmp_path / "unused-local-resumes")
+    monkeypatch.setenv("CAREERPAL_RESUME_STORAGE_PROVIDER", "oss")
+    monkeypatch.setenv("CAREERPAL_OSS_ENDPOINT", "https://oss-cn-hangzhou.aliyuncs.com")
+    monkeypatch.setenv("CAREERPAL_OSS_BUCKET", "careerpal-bucket")
+    monkeypatch.setenv("CAREERPAL_OSS_ACCESS_KEY_ID", "test-access-key")
+    monkeypatch.setenv("CAREERPAL_OSS_ACCESS_KEY_SECRET", "test-secret")
+    get_settings.cache_clear()
+    recording_storage = RecordingResumeStorage()
+    monkeypatch.setattr(resume_api, "build_resume_storage", lambda settings: recording_storage)
+
+    class FailingDb:
+        rolled_back = False
+
+        def add(self, resume_file):
+            pass
+
+        def flush(self):
+            pass
+
+        def refresh(self, resume_file):
+            pass
+
+        def commit(self):
+            raise RuntimeError("commit failed")
+
+        def rollback(self):
+            self.rolled_back = True
+
+        def close(self):
+            pass
+
+    failing_db = FailingDb()
+
+    def override_db():
+        yield failing_db
+
+    client.app.dependency_overrides[resume_api.get_current_user] = lambda: SimpleNamespace(id="user-1")
+    client.app.dependency_overrides[resume_api.get_db] = override_db
+    try:
+        with pytest.raises(RuntimeError, match="commit failed"):
+            client.post(
+                "/api/resume/upload",
+                files={"file": ("resume.pdf", b"%PDF-1.4\nsample resume", "application/pdf")},
+            )
+    finally:
+        client.app.dependency_overrides.pop(resume_api.get_current_user, None)
+        client.app.dependency_overrides.pop(resume_api.get_db, None)
+
+    assert failing_db.rolled_back is True
+    assert len(recording_storage.saved) == 1
+    assert recording_storage.deleted == [f"oss://careerpal-bucket/{recording_storage.saved[0][1]}"]
 
 
 def test_resume_upload_removes_stored_file_when_db_refresh_fails_before_commit(client, tmp_path, monkeypatch):
