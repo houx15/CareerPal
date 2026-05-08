@@ -286,14 +286,17 @@ describe("ApiClient", () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      headers: new Headers({ "Content-Type": "application/pdf" }),
+      headers: new Headers({
+        "Content-Type": "application/pdf",
+        "Content-Disposition": 'attachment; filename="careerpal_resume_maya-chen.pdf"',
+      }),
       blob: async () => pdf,
     });
     const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
 
     const result = await client.exportProfilePdf();
 
-    expect(result).toBe(pdf);
+    expect(result).toEqual({ blob: pdf, filename: "careerpal_resume_maya-chen.pdf" });
     expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/page/export/pdf", {
       headers: { Authorization: "Bearer token-123" },
     });

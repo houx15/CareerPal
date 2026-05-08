@@ -144,11 +144,11 @@ export function ResumeScreen({
         {pageError ? <div className="form-error">{pageError}</div> : null}
         <div className="resume-site-foot">
           <div className="resume-site-url">careerpal.co/{profile.handle}</div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" type="button" disabled={isExportingPdf} onClick={() => onExportPdf?.()}>
-              Download PDF
+          <div className="resume-site-actions">
+            <button className="btn btn-ghost btn-sm" type="button" disabled={isExportingPdf} onClick={() => onExportPdf?.()}>
+              {isExportingPdf ? "Preparing PDF..." : "Download PDF"}
             </button>
-            <button className="btn btn-accent" type="button" disabled={isGeneratingPage} onClick={generate}>
+            <button className="btn btn-accent btn-sm" type="button" disabled={isGeneratingPage} onClick={generate}>
               {generatedPage ? "Regenerate page" : isGeneratingPage ? "Creating..." : "Create my page"}
             </button>
           </div>

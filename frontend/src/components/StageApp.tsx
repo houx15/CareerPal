@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import { LangProvider } from "../i18n/LangProvider";
-import { ApiClient, ApiError } from "../lib/api";
+import { ApiClient, ApiError, type PdfExport } from "../lib/api";
 import type {
   Conversation,
   ConversationMessage,
@@ -44,7 +44,7 @@ export interface StageApi {
   generatePage?(styleTemplate: PageStyleTemplate): Promise<GeneratedPage>;
   customizePage?(payload: CustomizePagePayload): Promise<GeneratedPage>;
   updatePageSettings?(payload: PageSettingsPayload): Promise<GeneratedPage>;
-  exportProfilePdf?(): Promise<Blob>;
+  exportProfilePdf?(): Promise<PdfExport>;
 }
 
 interface StageAppProps {
@@ -377,10 +377,10 @@ function StageAppInner({ api }: StageAppProps) {
 
     try {
       const pdf = await client.exportProfilePdf();
-      const url = URL.createObjectURL(pdf);
+      const url = URL.createObjectURL(pdf.blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `careerpal-${exportUsername()}.pdf`;
+      anchor.download = pdf.filename;
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (caught) {
@@ -396,10 +396,6 @@ function StageAppInner({ api }: StageAppProps) {
     }
 
     window.open(url, "_blank", "noopener,noreferrer");
-  }
-
-  function exportUsername(): string {
-    return accountUser?.username ?? (pendingEmail ? usernameFromEmail(pendingEmail) : usernameFromName(profile?.name || "CareerPal user"));
   }
 
   if (stage === "intro") {

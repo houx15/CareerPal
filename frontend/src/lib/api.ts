@@ -20,6 +20,11 @@ import type {
 
 type TokenProvider = () => string | null;
 
+export interface PdfExport {
+  blob: Blob;
+  filename: string;
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -108,14 +113,14 @@ export class ApiClient {
     return this.request("/api/page/settings", { method: "PATCH", body: payload, auth: true });
   }
 
-  exportProfilePdf(): Promise<Blob> {
+  exportProfilePdf(): Promise<PdfExport> {
     return this.requestBlob("/api/page/export/pdf", { auth: true });
   }
 
   private async requestBlob(
     path: string,
     options: { method?: string; auth?: boolean } = {},
-  ): Promise<Blob> {
+  ): Promise<PdfExport> {
     const headers: Record<string, string> = {};
 
     const token = options.auth ? this.getToken() : null;
@@ -133,7 +138,10 @@ export class ApiClient {
       throw new ApiError(response.status, error.message, error.detail);
     }
 
-    return response.blob();
+    return {
+      blob: await response.blob(),
+      filename: filenameFromDisposition(response.headers?.get("content-disposition")) ?? "careerpal_resume.pdf",
+    };
   }
 
   private async request<T>(
@@ -277,4 +285,20 @@ export class ApiClient {
     const field = loc[loc.length - 1];
     return typeof field === "string" || typeof field === "number" ? `${field}: ${msg}` : msg;
   }
+}
+
+function filenameFromDisposition(disposition: string | null | undefined): string | null {
+  if (!disposition) {
+    return null;
+  }
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1].trim());
+  }
+  const quotedMatch = disposition.match(/filename="([^"]+)"/i);
+  if (quotedMatch?.[1]) {
+    return quotedMatch[1].trim();
+  }
+  const plainMatch = disposition.match(/filename=([^;]+)/i);
+  return plainMatch?.[1]?.trim() || null;
 }

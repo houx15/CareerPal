@@ -232,7 +232,7 @@ describe("Workspace", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /my resume/i }));
 
-    expect(screen.getByRole("button", { name: /download pdf/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /preparing pdf/i })).toBeDisabled();
   });
 
   it("renders an existing generated page preview and customizes it through page workflow", async () => {

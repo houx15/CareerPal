@@ -1602,7 +1602,7 @@ input, textarea { font-family: inherit; }
 .resume-tpl .tpl-name { font-size: 13px; color: var(--ink-2); padding-left: 2px; }
 .resume-tpl.selected .tpl-name { color: var(--accent); font-weight: 500; }
 .resume-site-foot {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
   margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--hair);
 }
 .resume-site-url {
@@ -1610,7 +1610,9 @@ input, textarea { font-family: inherit; }
   font-size: 13px; color: var(--ink-3);
   background: var(--bg-tint);
   padding: 6px 10px; border-radius: 6px;
+  min-width: 0; overflow-wrap: anywhere;
 }
+.resume-site-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .resume-section-head {
   display: flex; justify-content: space-between; align-items: flex-end;
   margin-bottom: 14px;

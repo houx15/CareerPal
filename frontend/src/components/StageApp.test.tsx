@@ -73,7 +73,10 @@ function apiMock() {
       is_public: payload.is_public,
       created_at: "2026-05-08T00:00:00Z",
     })),
-    exportProfilePdf: vi.fn().mockResolvedValue(new Blob(["%PDF-1.7"], { type: "application/pdf" })),
+    exportProfilePdf: vi.fn().mockResolvedValue({
+      blob: new Blob(["%PDF-1.7"], { type: "application/pdf" }),
+      filename: "careerpal_resume_alex-chen.pdf",
+    }),
   };
 }
 
@@ -368,6 +371,7 @@ describe("StageApp", () => {
       await waitFor(() => expect(api.exportProfilePdf).toHaveBeenCalled());
       expect(createObjectUrl).toHaveBeenCalledWith(expect.any(Blob));
       expect(clickMock).toHaveBeenCalled();
+      expect((clickMock.mock.contexts[0] as HTMLAnchorElement).download).toBe("careerpal_resume_alex-chen.pdf");
       expect(revokeObjectUrl).toHaveBeenCalledWith("blob:careerpal-pdf");
     } finally {
       URL.createObjectURL = originalCreateObjectURL;
