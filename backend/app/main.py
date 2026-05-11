@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.auth import router as auth_router
 from app.api.conversation import router as conversation_router
+from app.api.growth import router as growth_router
 from app.api.health import router as health_router
 from app.api.match import router as match_router
 from app.api.page import router as page_router
@@ -19,7 +20,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "OPTIONS"],
         allow_headers=["content-type", "authorization"],
     )
     app.include_router(health_router, prefix="/api")
@@ -29,6 +30,7 @@ def create_app() -> FastAPI:
     app.include_router(resume_router, prefix="/api")
     app.include_router(page_router, prefix="/api")
     app.include_router(match_router, prefix="/api")
+    app.include_router(growth_router, prefix="/api")
     app.include_router(public_router)
     return app
 

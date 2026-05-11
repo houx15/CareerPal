@@ -203,6 +203,31 @@ export interface GeneratedPageVersionsResponse {
   versions: GeneratedPageVersion[];
 }
 
+export type GrowthNodeState = "done" | "active" | "locked";
+
+export interface GrowthPlanNode {
+  id: string;
+  label: string;
+  state: GrowthNodeState;
+  quality: number;
+  parent: string | null;
+  x: number;
+  y: number;
+}
+
+export interface GrowthPlan {
+  id: string;
+  goal: string;
+  nodes: GrowthPlanNode[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GrowthPlanUpsertPayload {
+  goal: string;
+  nodes: GrowthPlanNode[];
+}
+
 export interface JobMatchAnalysis {
   id: string;
   job_description: string;

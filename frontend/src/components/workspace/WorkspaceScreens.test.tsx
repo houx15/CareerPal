@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { LangProvider } from "../../i18n/LangProvider";
+import type { GrowthPlan } from "../../lib/types";
 import { Workspace } from "./Workspace";
 
 const backendAnalysis = {
@@ -15,6 +16,17 @@ const backendAnalysis = {
   suggestions: ["Tailor the headline toward Frontend Engineer.", "Highlight shipped UI work."],
   created_at: "2026-05-08T00:00:00Z",
   updated_at: "2026-05-08T00:00:00Z",
+};
+
+const persistedGrowthPlan: GrowthPlan = {
+  id: "growth-1",
+  goal: "Become a platform engineer",
+  nodes: [
+    { id: "root", label: "Distributed systems", state: "active", quality: 0.7, parent: null, x: 50, y: 18 },
+    { id: "sql", label: "SQL evidence", state: "locked", quality: 0.2, parent: "root", x: 28, y: 58 },
+  ],
+  created_at: "2026-05-11T00:00:00Z",
+  updated_at: "2026-05-11T00:00:00Z",
 };
 
 function renderWorkspace(props: Partial<Parameters<typeof Workspace>[0]> = {}) {
@@ -73,6 +85,17 @@ describe("workspace screens", () => {
     await userEvent.click(growActions[0]);
 
     expect(screen.getByText(/grow your craft/i)).toBeInTheDocument();
+  });
+
+  it("renders the persisted growth plan on the Grow screen", async () => {
+    renderWorkspace({ growthPlan: persistedGrowthPlan });
+
+    await userEvent.click(screen.getByRole("button", { name: /^grow$/i }));
+
+    expect(screen.getByText("Become a platform engineer")).toBeInTheDocument();
+    expect(screen.getByText("Distributed systems")).toBeInTheDocument();
+    expect(screen.getByText("SQL evidence")).toBeInTheDocument();
+    expect(screen.queryByText("React evidence")).not.toBeInTheDocument();
   });
 
   it("opens recent match history", async () => {

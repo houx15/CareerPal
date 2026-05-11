@@ -11,6 +11,8 @@ import type {
   GeneratedPage,
   GeneratedPageVersion,
   GeneratedPageVersionsResponse,
+  GrowthPlan,
+  GrowthPlanUpsertPayload,
   JobMatchAnalysis,
   JobMatchHistory,
   PageStyleTemplate,
@@ -51,6 +53,8 @@ export interface StageApi {
   listPageVersions?(): Promise<GeneratedPageVersionsResponse>;
   customizePage?(payload: CustomizePagePayload): Promise<GeneratedPage>;
   updatePageSettings?(payload: PageSettingsPayload): Promise<GeneratedPage>;
+  getGrowthPlan?(): Promise<GrowthPlan>;
+  saveGrowthPlan?(payload: GrowthPlanUpsertPayload): Promise<GrowthPlan>;
   exportProfilePdf?(): Promise<PdfExport>;
   analyzeJobMatch?(payload: AnalyzeJobMatchPayload): Promise<JobMatchAnalysis>;
   listJobMatches?(): Promise<JobMatchHistory>;
@@ -86,6 +90,7 @@ function StageAppInner({ api }: StageAppProps) {
   const [pageConversation, setPageConversation] = useState<Conversation | null>(null);
   const [generatedPage, setGeneratedPage] = useState<GeneratedPage | null>(null);
   const [pageVersions, setPageVersions] = useState<GeneratedPageVersion[]>([]);
+  const [growthPlan, setGrowthPlan] = useState<GrowthPlan | null>(null);
   const [isGeneratingPage, setIsGeneratingPage] = useState(false);
   const [isUpdatingPageVisibility, setIsUpdatingPageVisibility] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -137,12 +142,13 @@ function StageAppInner({ api }: StageAppProps) {
     setWorkspaceError(null);
 
     try {
-      const [nextProfile, nextCompleteness, conversation, latestPage, latestPageVersions, latestMatches] = await Promise.all([
+      const [nextProfile, nextCompleteness, conversation, latestPage, latestPageVersions, latestGrowthPlan, latestMatches] = await Promise.all([
         client.getProfile(),
         client.getCompleteness(),
         ensureCareerConversation(null),
         loadLatestPagePreview(),
         loadPageVersions(),
+        loadGrowthPlan(),
         loadJobMatchHistory(),
       ]);
       if (workspaceRequestIdRef.current !== requestId) {
@@ -154,6 +160,7 @@ function StageAppInner({ api }: StageAppProps) {
       setOnboardingConversation(conversation ?? null);
       setGeneratedPage(latestPage);
       setPageVersions(latestPageVersions);
+      setGrowthPlan(latestGrowthPlan);
       setJobMatches(latestMatches);
       if (workspaceRequestIdRef.current !== requestId) {
         return;
@@ -181,6 +188,7 @@ function StageAppInner({ api }: StageAppProps) {
     setPageConversation(null);
     setGeneratedPage(null);
     setPageVersions([]);
+    setGrowthPlan(null);
     setIsGeneratingPage(false);
     setIsUpdatingPageVisibility(false);
     setIsExportingPdf(false);
@@ -269,6 +277,31 @@ function StageAppInner({ api }: StageAppProps) {
     } catch {
       return [];
     }
+  }
+
+  async function loadGrowthPlan(): Promise<GrowthPlan | null> {
+    if (!client.getGrowthPlan) {
+      return null;
+    }
+
+    try {
+      return await client.getGrowthPlan();
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 404) {
+        return null;
+      }
+
+      throw caught;
+    }
+  }
+
+  async function handleSaveGrowthPlan(payload: GrowthPlanUpsertPayload): Promise<GrowthPlan> {
+    if (!client.saveGrowthPlan) {
+      throw new Error("Growth plan saving is not available.");
+    }
+    const nextPlan = await client.saveGrowthPlan(payload);
+    setGrowthPlan(nextPlan);
+    return nextPlan;
   }
 
   async function ensurePageConversation(): Promise<Conversation | undefined> {
@@ -591,6 +624,7 @@ function StageAppInner({ api }: StageAppProps) {
       onOpenConversation={handleOpenImproveConversation}
       generatedPage={generatedPageForWorkspace}
       pageVersions={pageVersions}
+      growthPlan={growthPlan}
       pageConversationMessages={pageConversation ? toImproveMessages(pageConversation.messages) : undefined}
       isGeneratingPage={isGeneratingPage}
       isExportingPdf={isExportingPdf}
@@ -609,6 +643,7 @@ function StageAppInner({ api }: StageAppProps) {
       onCreateJobMatch={handleCreateJobMatch}
       onOpenJobMatch={handleOpenJobMatch}
       onSaveTargetedVersion={handleSaveTargetedVersion}
+      onSaveGrowthPlan={handleSaveGrowthPlan}
       onLogout={handleLogout}
       onPatchProfile={handlePatchProfile}
     />

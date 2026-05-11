@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiClient, ApiError } from "./api";
+import type { GrowthPlan } from "./types";
 
 describe("ApiClient", () => {
   it("attaches bearer token and returns parsed JSON", async () => {
@@ -240,6 +241,59 @@ describe("ApiClient", () => {
     expect(result).toEqual(versions);
     expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/page/versions", {
       headers: { Authorization: "Bearer token-123" },
+    });
+  });
+
+  it("gets the persisted growth plan with bearer auth", async () => {
+    const plan: GrowthPlan = {
+      id: "growth-1",
+      goal: "Become a platform engineer",
+      nodes: [
+        { id: "root", label: "Start", state: "done", quality: 1, parent: null, x: 0, y: 0 },
+        { id: "sql", label: "SQL evidence", state: "active", quality: 0.45, parent: "root", x: -180, y: 140 },
+      ],
+      created_at: "2026-05-11T00:00:00Z",
+      updated_at: "2026-05-11T00:00:00Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "Content-Type": "application/json" }),
+      json: async () => plan,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.getGrowthPlan();
+
+    expect(result).toEqual(plan);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/growth/plan", {
+      headers: { Authorization: "Bearer token-123" },
+    });
+  });
+
+  it("saves a growth plan with bearer auth", async () => {
+    const plan: GrowthPlan = {
+      id: "growth-1",
+      goal: "Become a platform engineer",
+      nodes: [{ id: "root", label: "Start", state: "done", quality: 1, parent: null, x: 0, y: 0 }],
+      created_at: "2026-05-11T00:00:00Z",
+      updated_at: "2026-05-11T00:00:00Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "Content-Type": "application/json" }),
+      json: async () => plan,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.saveGrowthPlan({ goal: plan.goal, nodes: plan.nodes });
+
+    expect(result).toEqual(plan);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/growth/plan", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token-123" },
+      body: JSON.stringify({ goal: plan.goal, nodes: plan.nodes }),
     });
   });
 

@@ -5,6 +5,8 @@ import type {
   ExperienceItem,
   GeneratedPage,
   GeneratedPageVersion,
+  GrowthPlan,
+  GrowthPlanUpsertPayload,
   JobMatchAnalysis,
   PageStyleTemplate,
   ProjectItem,
@@ -46,6 +48,7 @@ interface WorkspaceProps {
   onOpenConversation?: (section: ImproveSection) => void;
   generatedPage?: GeneratedPage | null;
   pageVersions?: GeneratedPageVersion[];
+  growthPlan?: GrowthPlan | null;
   pageConversationMessages?: Array<{ role: "ai" | "user"; body: string }>;
   isGeneratingPage?: boolean;
   isExportingPdf?: boolean;
@@ -64,6 +67,7 @@ interface WorkspaceProps {
   onCreateJobMatch?: (jobDescription: string) => Promise<JobMatchAnalysis>;
   onOpenJobMatch?: (id: string) => Promise<JobMatchAnalysis>;
   onSaveTargetedVersion?: (id: string, styleTemplate: PageStyleTemplate) => Promise<GeneratedPage>;
+  onSaveGrowthPlan?: (payload: GrowthPlanUpsertPayload) => Promise<GrowthPlan>;
 }
 
 export function Workspace({
@@ -77,6 +81,7 @@ export function Workspace({
   onSendMessage,
   onOpenConversation,
   generatedPage,
+  growthPlan,
   pageConversationMessages,
   isGeneratingPage,
   isExportingPdf,
@@ -95,6 +100,7 @@ export function Workspace({
   onCreateJobMatch,
   onOpenJobMatch,
   onSaveTargetedVersion,
+  onSaveGrowthPlan,
   pageVersions,
 }: WorkspaceProps) {
   const name = profile.name || "CareerPal user";
@@ -128,6 +134,7 @@ export function Workspace({
       onOpenConversation={onOpenConversation}
       generatedPage={generatedPage}
       pageVersions={pageVersions}
+      growthPlan={growthPlan}
       pageConversationMessages={pageConversationMessages}
       isGeneratingPage={isGeneratingPage}
       isExportingPdf={isExportingPdf}
@@ -146,6 +153,7 @@ export function Workspace({
       onCreateJobMatch={onCreateJobMatch}
       onOpenJobMatch={onOpenJobMatch}
       onSaveTargetedVersion={onSaveTargetedVersion}
+      onSaveGrowthPlan={onSaveGrowthPlan}
       onLogout={onLogout}
       onPatchProfile={async (payload) => {
         const saved = await onPatchProfile(payload);

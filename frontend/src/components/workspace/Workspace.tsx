@@ -11,6 +11,8 @@ import type {
   ExperienceItem,
   GeneratedPage,
   GeneratedPageVersion,
+  GrowthPlan,
+  GrowthPlanUpsertPayload,
   JobMatchAnalysis,
   PageStyleTemplate,
   ProfilePatch,
@@ -45,6 +47,7 @@ interface WorkspaceProps {
   onOpenConversation?: (section: ImproveSection) => void;
   generatedPage?: GeneratedPage | null;
   pageVersions?: GeneratedPageVersion[];
+  growthPlan?: GrowthPlan | null;
   pageConversationMessages?: Array<{ role: "ai" | "user"; body: string }>;
   isGeneratingPage?: boolean;
   isExportingPdf?: boolean;
@@ -63,6 +66,7 @@ interface WorkspaceProps {
   onCreateJobMatch?: (jobDescription: string) => Promise<JobMatchAnalysis>;
   onOpenJobMatch?: (id: string) => Promise<JobMatchAnalysis>;
   onSaveTargetedVersion?: (id: string, styleTemplate: PageStyleTemplate) => Promise<GeneratedPage>;
+  onSaveGrowthPlan?: (payload: GrowthPlanUpsertPayload) => Promise<GrowthPlan>;
 }
 
 type Tab = "profile" | "match" | "resume" | "grow" | "activity" | "settings";
@@ -86,6 +90,7 @@ export function Workspace({
   onSendMessage,
   onOpenConversation,
   generatedPage,
+  growthPlan,
   pageConversationMessages,
   isGeneratingPage,
   isExportingPdf,
@@ -104,6 +109,7 @@ export function Workspace({
   onCreateJobMatch,
   onOpenJobMatch,
   onSaveTargetedVersion,
+  onSaveGrowthPlan,
   pageVersions,
 }: WorkspaceProps) {
   const { t, lang } = useLang();
@@ -341,7 +347,7 @@ export function Workspace({
           onJumpGrow={() => setTab("grow")}
         />
       ) : null}
-      {tab === "grow" ? <GrowScreen /> : null}
+      {tab === "grow" ? <GrowScreen growthPlan={growthPlan} onSaveGrowthPlan={onSaveGrowthPlan} /> : null}
       {tab === "activity" ? <ActivityScreen /> : null}
       {tab === "settings" ? <SettingsScreen onLogout={onLogout} /> : null}
 

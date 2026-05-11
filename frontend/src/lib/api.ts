@@ -6,6 +6,8 @@ import type {
   JobMatchAnalysis,
   JobMatchHistory,
   Conversation,
+  GrowthPlan,
+  GrowthPlanUpsertPayload,
   LoginPayload,
   GeneratedPageVersionsResponse,
   PageSettingsPayload,
@@ -112,6 +114,14 @@ export class ApiClient {
 
   listPageVersions(): Promise<GeneratedPageVersionsResponse> {
     return this.request("/api/page/versions", { auth: true });
+  }
+
+  getGrowthPlan(): Promise<GrowthPlan> {
+    return this.request("/api/growth/plan", { auth: true });
+  }
+
+  saveGrowthPlan(payload: GrowthPlanUpsertPayload): Promise<GrowthPlan> {
+    return this.request("/api/growth/plan", { method: "PUT", body: payload, auth: true });
   }
 
   customizePage(payload: CustomizePagePayload): Promise<GeneratedPage> {

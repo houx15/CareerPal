@@ -33,6 +33,18 @@ const targetedPageVersion = {
   target_company: "Vercel",
 };
 
+const growthPlan = {
+  id: "growth-1",
+  goal: "Become a platform engineer",
+  nodes: [
+    { id: "root", label: "Start", state: "done" as const, quality: 1, parent: null, x: 0, y: 0 },
+    { id: "systems", label: "Distributed systems", state: "active" as const, quality: 0.45, parent: "root", x: -180, y: 140 },
+    { id: "sql", label: "SQL evidence", state: "locked" as const, quality: 0, parent: "systems", x: -260, y: 280 },
+  ],
+  created_at: "2026-05-11T00:00:00Z",
+  updated_at: "2026-05-11T00:00:00Z",
+};
+
 function apiMock() {
   return {
     register: vi
@@ -109,6 +121,8 @@ function apiMock() {
     getJobMatch: vi.fn().mockResolvedValue(matchAnalysis),
     listPageVersions: vi.fn().mockResolvedValue({ versions: [] }),
     saveJobMatchVersion: vi.fn().mockResolvedValue(targetedPageVersion),
+    getGrowthPlan: vi.fn().mockResolvedValue(growthPlan),
+    saveGrowthPlan: vi.fn().mockResolvedValue(growthPlan),
   };
 }
 
@@ -178,6 +192,22 @@ describe("StageApp", () => {
     expect(await screen.findByText(/profile completion/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /my resume/i })).toBeInTheDocument();
     expect(screen.queryByText(/what should i call you/i)).not.toBeInTheDocument();
+  }, 10000);
+
+  it("loads a persisted growth plan into the Grow screen after login", async () => {
+    const api = apiMock();
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /grow/i }));
+
+    await waitFor(() => expect(api.getGrowthPlan).toHaveBeenCalled());
+    expect(await screen.findByText("Become a platform engineer")).toBeInTheDocument();
+    expect(screen.getByText("Distributed systems")).toBeInTheDocument();
+    expect(screen.getByText("SQL evidence")).toBeInTheDocument();
   }, 10000);
 
   it("loads the workspace when no generated page exists yet", async () => {
