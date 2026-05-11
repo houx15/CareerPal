@@ -436,6 +436,7 @@ describe("StageApp", () => {
       }),
     );
     expect(await screen.findByRole("heading", { name: "Frontend Engineer at Vercel" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /back/i }));
     expect(screen.getByRole("button", { name: /frontend engineer at vercel/i })).toBeInTheDocument();
   }, 10000);
 

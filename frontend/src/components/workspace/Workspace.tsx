@@ -328,6 +328,7 @@ export function Workspace({
           jobMatchError={jobMatchError}
           onCreateJobMatch={onCreateJobMatch}
           onOpenJobMatch={onOpenJobMatch}
+          onJumpGrow={() => setTab("grow")}
         />
       ) : null}
       {tab === "grow" ? <GrowScreen /> : null}

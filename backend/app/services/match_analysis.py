@@ -1,6 +1,9 @@
+import json
 import re
+from collections.abc import Sequence
 
 from app.models.user import Profile
+from app.services.llm import LLMClient, LLMMessage
 
 KEYWORDS = [
     "python",
@@ -22,7 +25,18 @@ KEYWORDS = [
 ]
 
 
-def analyze_job_description(profile: Profile, job_description: str) -> dict[str, object]:
+class MatchAnalysisError(RuntimeError):
+    pass
+
+
+def analyze_job_description(profile: Profile, job_description: str, llm_client: LLMClient | None = None) -> dict[str, object]:
+    clean_jd = job_description.strip()
+    if llm_client is not None:
+        return _analyze_with_llm(profile, clean_jd, llm_client)
+    return heuristic_job_description_analysis(profile, clean_jd)
+
+
+def heuristic_job_description_analysis(profile: Profile, job_description: str) -> dict[str, object]:
     clean_jd = job_description.strip()
     role = _detect_label(clean_jd, ["role", "job title", "position", "title"]) or _detect_role_at_company(clean_jd)[0]
     company = _detect_label(clean_jd, ["company", "organization"]) or _detect_role_at_company(clean_jd)[1]
@@ -68,6 +82,152 @@ def analyze_job_description(profile: Profile, job_description: str) -> dict[str,
         "gaps": gaps,
         "suggestions": suggestions,
     }
+
+
+def _analyze_with_llm(profile: Profile, job_description: str, llm_client: LLMClient) -> dict[str, object]:
+    return _parse_llm_match_payload(_collect_stream(llm_client, _llm_messages(profile, job_description)), job_description)
+
+
+def _collect_stream(llm_client: LLMClient, messages: Sequence[LLMMessage]) -> str:
+    import anyio
+
+    async def collect() -> str:
+        chunks = []
+        async for chunk in llm_client.stream_chat(messages):
+            chunks.append(chunk)
+        return "".join(chunks)
+
+    return anyio.run(collect)
+
+
+def _llm_messages(profile: Profile, job_description: str) -> list[LLMMessage]:
+    profile_context_json = json.dumps(_profile_prompt_context(profile), ensure_ascii=True)
+    return [
+        LLMMessage(
+            role="system",
+            content=(
+                "You are CareerPal's match analyst for university students. "
+                "Compare the current profile against the pasted job description. "
+                "Return only JSON with these fields: company, role, score, strengths, gaps, suggestions. "
+                "score must be an integer from 0 to 100. strengths, gaps, and suggestions must be arrays "
+                "of concise strings. Never invent profile evidence; identify gaps when evidence is missing.\n\n"
+                f"Current student's profile JSON:\n{profile_context_json}"
+            ),
+        ),
+        LLMMessage(role="user", content=f"Job description:\n{job_description}"),
+    ]
+
+
+def _profile_prompt_context(profile: Profile) -> dict[str, object]:
+    return {
+        "name": profile.name,
+        "phone": profile.phone,
+        "contact_email": profile.contact_email,
+        "location": profile.location,
+        "headline": profile.headline,
+        "target_direction": profile.target_direction,
+        "comment": profile.comment,
+        "education": [
+            {
+                "school": item.school,
+                "degree": item.degree,
+                "time": item.time,
+                "comment": item.comment,
+            }
+            for item in profile.education_items
+        ],
+        "experience": [
+            {
+                "company": item.company,
+                "role": item.role,
+                "time": item.time,
+                "description": item.description,
+                "achievements": item.achievements,
+                "comment": item.comment,
+            }
+            for item in profile.experience_items
+        ],
+        "projects": [
+            {
+                "name": item.name,
+                "description": item.description,
+                "tech_stack": item.tech_stack,
+                "achievements": item.achievements,
+                "link": item.link,
+                "comment": item.comment,
+                "completeness": item.completeness,
+            }
+            for item in profile.project_items
+        ],
+        "skills": [
+            {
+                "name": item.name,
+                "category": item.category,
+                "proficiency": item.proficiency,
+                "comment": item.comment,
+            }
+            for item in profile.skill_items
+        ],
+        "certificates": [
+            {
+                "name": item.name,
+                "issuer": item.issuer,
+                "date": item.date.isoformat(),
+                "comment": item.comment,
+            }
+            for item in profile.certificate_items
+        ],
+    }
+
+
+def _parse_llm_match_payload(raw_payload: str, job_description: str) -> dict[str, object]:
+    try:
+        payload = json.loads(_extract_json_object(raw_payload))
+    except (json.JSONDecodeError, MatchAnalysisError) as exc:
+        raise MatchAnalysisError("LLM provider returned invalid match analysis") from exc
+    if not isinstance(payload, dict):
+        raise MatchAnalysisError("LLM provider returned invalid match analysis")
+
+    score = payload.get("score")
+    if type(score) is not int:
+        raise MatchAnalysisError("LLM provider returned invalid match analysis")
+
+    return {
+        "job_description": job_description,
+        "company": _clean_optional_string(payload.get("company")),
+        "role": _clean_optional_string(payload.get("role")),
+        "score": max(0, min(score, 100)),
+        "strengths": _clean_string_list(payload.get("strengths")),
+        "gaps": _clean_string_list(payload.get("gaps")),
+        "suggestions": _clean_string_list(payload.get("suggestions")),
+    }
+
+
+def _extract_json_object(raw_payload: str) -> str:
+    stripped = raw_payload.strip()
+    if stripped.startswith("{") and stripped.endswith("}"):
+        return stripped
+    start = stripped.find("{")
+    end = stripped.rfind("}")
+    if start == -1 or end == -1 or end <= start:
+        raise MatchAnalysisError("LLM provider returned invalid match analysis")
+    return stripped[start : end + 1]
+
+
+def _clean_optional_string(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip()
+    return cleaned[:255] or None
+
+
+def _clean_string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        raise MatchAnalysisError("LLM provider returned invalid match analysis")
+    cleaned = [item.strip()[:500] for item in value if isinstance(item, str) and item.strip()]
+    if not cleaned:
+        raise MatchAnalysisError("LLM provider returned invalid match analysis")
+    return cleaned[:8]
 
 
 def _detect_label(text: str, labels: list[str]) -> str | None:

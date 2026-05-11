@@ -12,6 +12,7 @@ export function MatchScreen({
   jobMatchError,
   onCreateJobMatch,
   onOpenJobMatch,
+  onJumpGrow,
 }: {
   profile: DemoProfile;
   jobMatches?: JobMatchAnalysis[];
@@ -19,6 +20,7 @@ export function MatchScreen({
   jobMatchError?: string | null;
   onCreateJobMatch?: (jobDescription: string) => Promise<JobMatchAnalysis>;
   onOpenJobMatch?: (id: string) => Promise<JobMatchAnalysis>;
+  onJumpGrow?: () => void;
 }) {
   const [jd, setJd] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
@@ -52,6 +54,14 @@ export function MatchScreen({
 
   const error = localError ?? jobMatchError;
   const visibleMatches = showAllHistory ? jobMatches : jobMatches.slice(0, 4);
+
+  if (result) {
+    return (
+      <div className="page-pad" data-screen-label="07 Match · Result">
+        <MatchResult analysis={result} onBack={() => setResult(null)} onJumpGrow={onJumpGrow} />
+      </div>
+    );
+  }
 
   return (
     <div className="page-pad" data-screen-label="07 Match">
@@ -98,12 +108,11 @@ export function MatchScreen({
           </div>
         </section>
       ) : null}
-      {result ? <MatchResult analysis={result} onBack={() => setResult(null)} /> : null}
     </div>
   );
 }
 
-function MatchResult({ analysis, onBack }: { analysis: JobMatchAnalysis; onBack: () => void }) {
+function MatchResult({ analysis, onBack, onJumpGrow }: { analysis: JobMatchAnalysis; onBack: () => void; onJumpGrow?: () => void }) {
   return (
     <section className="match-result" style={{ marginTop: 24 }}>
       <div className="match-result-head">
@@ -126,6 +135,22 @@ function MatchResult({ analysis, onBack }: { analysis: JobMatchAnalysis; onBack:
           </div>
         </article>
         <article className="panel">
+          <div className="profile-card-title">Match radar</div>
+          <div style={{ display: "flex", justifyContent: "center", padding: "8px 0" }}>
+            <MatchRadar score={analysis.score} />
+          </div>
+          <div className="radar-legend">
+            <div>
+              <span className="dot" style={{ background: "#5367F3" }} />
+              You
+            </div>
+            <div>
+              <span className="dot" style={{ background: "rgba(83,103,243,0.25)" }} />
+              Role bar
+            </div>
+          </div>
+        </article>
+        <article className="panel">
           <div className="profile-card-title">Strengths</div>
           <ul className="match-list">
             {analysis.strengths.map((item) => (
@@ -134,10 +159,24 @@ function MatchResult({ analysis, onBack }: { analysis: JobMatchAnalysis; onBack:
           </ul>
         </article>
         <article className="panel">
-          <div className="profile-card-title">Gaps</div>
+          <div className="profile-card-title" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+            <span>Gaps</span>
+            {onJumpGrow ? (
+              <button className="btn btn-ghost btn-sm" type="button" onClick={onJumpGrow}>
+                Open Grow
+              </button>
+            ) : null}
+          </div>
           <ul className="match-list">
             {analysis.gaps.map((item) => (
-              <li key={item}>{item}</li>
+              <li key={item}>
+                <span>{item}</span>
+                {onJumpGrow ? (
+                  <button className="btn-link" type="button" onClick={onJumpGrow}>
+                    Open Grow
+                  </button>
+                ) : null}
+              </li>
             ))}
           </ul>
         </article>
@@ -151,6 +190,46 @@ function MatchResult({ analysis, onBack }: { analysis: JobMatchAnalysis; onBack:
         </article>
       </div>
     </section>
+  );
+}
+
+function MatchRadar({ score }: { score: number }) {
+  const dims = ["Skills", "Impact", "Domain", "Tools", "Clarity", "Growth"];
+  const base = Math.max(0.2, Math.min(score / 100, 0.96));
+  const values = dims.map((_, index) => Math.max(0.25, Math.min(0.98, base - (index % 3) * 0.08 + (index === 1 ? 0.06 : 0))));
+  const size = 220;
+  const cx = size / 2;
+  const cy = size / 2;
+  const radius = size / 2 - 28;
+  const point = (index: number, value: number) => {
+    const angle = (Math.PI * 2 * index) / dims.length - Math.PI / 2;
+    return [cx + Math.cos(angle) * radius * value, cy + Math.sin(angle) * radius * value];
+  };
+  const polygon = (items: number[]) => items.map((value, index) => point(index, value).join(",")).join(" ");
+
+  return (
+    <svg aria-label="Match radar" width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img">
+      {[0.25, 0.5, 0.75, 1].map((ring) => (
+        <polygon key={ring} points={polygon(Array(dims.length).fill(ring))} fill="none" stroke="rgba(83,103,243,0.12)" />
+      ))}
+      {dims.map((dim, index) => {
+        const [x, y] = point(index, 1);
+        const [labelX, labelY] = point(index, 1.2);
+        return (
+          <g key={dim}>
+            <line x1={cx} y1={cy} x2={x} y2={y} stroke="rgba(83,103,243,0.12)" />
+            <text x={labelX} y={labelY} textAnchor="middle" dominantBaseline="middle" fontSize="11" fill="#4a4a52">
+              {dim}
+            </text>
+          </g>
+        );
+      })}
+      <polygon points={polygon(values)} fill="rgba(83,103,243,0.20)" stroke="#5367F3" strokeWidth="2" strokeLinejoin="round" />
+      {values.map((value, index) => {
+        const [x, y] = point(index, value);
+        return <circle key={index} cx={x} cy={y} r="3.5" fill="#5367F3" />;
+      })}
+    </svg>
   );
 }
 

@@ -52,12 +52,27 @@ describe("workspace screens", () => {
 
     expect(onCreateJobMatch).toHaveBeenCalledWith("Frontend internship using React");
     expect(await screen.findByText(/match score/i)).toBeInTheDocument();
+    expect(screen.getByText(/Role bar/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/job description/i)).not.toBeInTheDocument();
     expect(screen.getByText("82")).toBeInTheDocument();
     expect(screen.getByText(/Frontend Engineer at Vercel/i)).toBeInTheDocument();
     expect(screen.getByText("Profile includes React.")).toBeInTheDocument();
     expect(screen.getByText("Add evidence for TypeScript.")).toBeInTheDocument();
     expect(screen.getByText("Tailor the headline toward Frontend Engineer.")).toBeInTheDocument();
     expect(screen.getByText("Highlight shipped UI work.")).toBeInTheDocument();
+  });
+
+  it("jumps from match gaps to grow", async () => {
+    const onCreateJobMatch = vi.fn().mockResolvedValue(backendAnalysis);
+    renderWorkspace({ onCreateJobMatch });
+
+    await userEvent.click(screen.getByRole("button", { name: /^match$/i }));
+    await userEvent.type(screen.getByPlaceholderText(/job description|role you're aiming/i), "Frontend internship using React");
+    await userEvent.click(screen.getByRole("button", { name: /analyze/i }));
+    const growActions = await screen.findAllByRole("button", { name: /open grow/i });
+    await userEvent.click(growActions[0]);
+
+    expect(screen.getByText(/grow your craft/i)).toBeInTheDocument();
   });
 
   it("opens recent match history", async () => {

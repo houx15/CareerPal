@@ -1,9 +1,11 @@
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.api.auth import get_current_user
 from app.api.profile import _current_profile
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.models.match import JobDescriptionAnalysis
 from app.models.user import User
@@ -12,7 +14,8 @@ from app.schemas.match import (
     JobDescriptionAnalyzeRequest,
     JobDescriptionHistoryResponse,
 )
-from app.services.match_analysis import analyze_job_description
+from app.services.llm import LLMProviderError, build_llm_client
+from app.services.match_analysis import MatchAnalysisError, analyze_job_description
 
 router = APIRouter(prefix="/match", tags=["match"])
 
@@ -24,7 +27,16 @@ def analyze_match(
     db: Session = Depends(get_db),
 ) -> JobDescriptionAnalysisResponse:
     profile = _current_profile(current_user, db)
-    analysis_payload = analyze_job_description(profile, payload.job_description)
+    try:
+        analysis_payload = analyze_job_description(
+            profile,
+            payload.job_description,
+            llm_client=build_llm_client(get_settings()),
+        )
+    except (LLMProviderError, MatchAnalysisError) as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"LLM provider error: {exc}") from exc
     analysis = JobDescriptionAnalysis(user_id=current_user.id, **analysis_payload)
     db.add(analysis)
     db.commit()
