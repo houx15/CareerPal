@@ -13,6 +13,8 @@ import type {
   GeneratedPageVersion,
   GeneratedPageVersionsResponse,
   GrowthPlan,
+  GrowthProgressLogPayload,
+  GrowthProgressResponse,
   GrowthPlanUpsertPayload,
   JobMatchAnalysis,
   JobMatchHistory,
@@ -57,6 +59,7 @@ export interface StageApi {
   getGrowthPlan?(): Promise<GrowthPlan>;
   saveGrowthPlan?(payload: GrowthPlanUpsertPayload): Promise<GrowthPlan>;
   generateGrowthPlan?(payload: GenerateGrowthPlanPayload): Promise<GrowthPlan>;
+  logGrowthProgress?(nodeId: string, payload: GrowthProgressLogPayload): Promise<GrowthProgressResponse>;
   exportProfilePdf?(): Promise<PdfExport>;
   analyzeJobMatch?(payload: AnalyzeJobMatchPayload): Promise<JobMatchAnalysis>;
   listJobMatches?(): Promise<JobMatchHistory>;
@@ -306,6 +309,21 @@ function StageAppInner({ api }: StageAppProps) {
     const nextPlan = await client.saveGrowthPlan(payload);
     setGrowthPlan(nextPlan);
     return nextPlan;
+  }
+
+  async function handleLogGrowthProgress(nodeId: string, payload: GrowthProgressLogPayload): Promise<GrowthProgressResponse> {
+    if (!client.logGrowthProgress) {
+      throw new Error("Growth progress logging is not available.");
+    }
+
+    const response = await client.logGrowthProgress(nodeId, payload);
+    setGrowthPlan(response.plan);
+    if (client.getProfile && client.getCompleteness) {
+      const [nextProfile, nextCompleteness] = await Promise.all([client.getProfile(), client.getCompleteness()]);
+      setProfile(nextProfile);
+      setCompleteness(nextCompleteness);
+    }
+    return response;
   }
 
   async function ensurePageConversation(): Promise<Conversation | undefined> {
@@ -671,6 +689,7 @@ function StageAppInner({ api }: StageAppProps) {
       onSaveTargetedVersion={handleSaveTargetedVersion}
       onGenerateGrowthPlanFromMatch={handleGenerateGrowthPlanFromMatch}
       onSaveGrowthPlan={handleSaveGrowthPlan}
+      onLogGrowthProgress={handleLogGrowthProgress}
       onLogout={handleLogout}
       onPatchProfile={handlePatchProfile}
     />

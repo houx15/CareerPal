@@ -15,6 +15,8 @@ import type {
   Profile,
   ProfileCompleteness,
   ProfilePatch,
+  GrowthProgressLogPayload,
+  GrowthProgressResponse,
   RegisterPayload,
   ResumeStructureResponse,
   ResumeUploadResponse,
@@ -127,6 +129,10 @@ export class ApiClient {
 
   generateGrowthPlan(payload: GenerateGrowthPlanPayload): Promise<GrowthPlan> {
     return this.request("/api/growth/plan/generate", { method: "POST", body: payload, auth: true });
+  }
+
+  logGrowthProgress(nodeId: string, payload: GrowthProgressLogPayload): Promise<GrowthProgressResponse> {
+    return this.request(`/api/growth/plan/nodes/${encodeURIComponent(nodeId)}/progress`, { method: "POST", body: payload, auth: true });
   }
 
   customizePage(payload: CustomizePagePayload): Promise<GeneratedPage> {

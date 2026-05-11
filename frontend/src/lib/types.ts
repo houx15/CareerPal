@@ -219,6 +219,7 @@ export interface GrowthPlan {
   id: string;
   goal: string;
   nodes: GrowthPlanNode[];
+  progress_logs?: GrowthProgressLog[];
   created_at: string;
   updated_at: string;
 }
@@ -230,6 +231,24 @@ export interface GrowthPlanUpsertPayload {
 
 export interface GenerateGrowthPlanPayload {
   match_analysis_id: string;
+}
+
+export interface GrowthProgressLogPayload {
+  evidence: string;
+}
+
+export interface GrowthProgressLog {
+  id: string;
+  node_id: string;
+  node_label: string;
+  evidence: string;
+  quality_delta: number;
+  created_at: string;
+}
+
+export interface GrowthProgressResponse {
+  plan: GrowthPlan;
+  log: GrowthProgressLog;
 }
 
 export interface JobMatchAnalysis {

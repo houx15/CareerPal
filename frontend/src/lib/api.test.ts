@@ -674,4 +674,43 @@ describe("ApiClient", () => {
       new ApiError(200, "LLM provider error: overloaded"),
     );
   });
+
+  it("logs growth progress with bearer auth", async () => {
+    const responsePayload = {
+      plan: {
+        id: "growth-1",
+        goal: "Become a platform engineer",
+        nodes: [
+          { id: "systems", label: "Distributed systems", state: "active", quality: 0.57, parent: null, x: 0, y: 0 },
+        ],
+        progress_logs: [],
+        created_at: "2026-05-11T00:00:00Z",
+        updated_at: "2026-05-11T00:01:00Z",
+      },
+      log: {
+        id: "log-1",
+        node_id: "systems",
+        node_label: "Distributed systems",
+        evidence: "Published a systems write-up.",
+        quality_delta: 0.12,
+        created_at: "2026-05-11T00:01:00Z",
+      },
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      headers: new Headers({ "Content-Type": "application/json" }),
+      json: async () => responsePayload,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.logGrowthProgress("systems", { evidence: "Published a systems write-up." });
+
+    expect(result).toEqual(responsePayload);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/growth/plan/nodes/systems/progress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token-123" },
+      body: JSON.stringify({ evidence: "Published a systems write-up." }),
+    });
+  });
 });

@@ -65,9 +65,40 @@ class GrowthPlanGenerateRequest(BaseModel):
     match_analysis_id: str = Field(min_length=1)
 
 
+class GrowthProgressLogCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    evidence: str = Field(min_length=1, max_length=4000)
+
+    @field_validator("evidence")
+    @classmethod
+    def evidence_must_not_be_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Evidence must not be blank")
+        return stripped
+
+
+class GrowthProgressLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    node_id: str
+    node_label: str
+    evidence: str
+    quality_delta: float
+    created_at: datetime
+
+
 class GrowthPlanResponse(BaseModel):
     id: str
     goal: str
     nodes: list[GrowthNode]
+    progress_logs: list[GrowthProgressLogResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+
+
+class GrowthProgressResponse(BaseModel):
+    plan: GrowthPlanResponse
+    log: GrowthProgressLogResponse

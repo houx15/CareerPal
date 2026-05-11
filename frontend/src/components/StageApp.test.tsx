@@ -134,6 +134,33 @@ function apiMock() {
     getGrowthPlan: vi.fn().mockResolvedValue(growthPlan),
     saveGrowthPlan: vi.fn().mockResolvedValue(growthPlan),
     generateGrowthPlan: vi.fn().mockResolvedValue(generatedGrowthPlan),
+    logGrowthProgress: vi.fn().mockResolvedValue({
+      plan: {
+        ...growthPlan,
+        nodes: growthPlan.nodes.map((node) =>
+          node.id === "systems" ? { ...node, quality: 0.57, state: "active" as const } : node,
+        ),
+        progress_logs: [
+          {
+            id: "progress-1",
+            node_id: "systems",
+            node_label: "Distributed systems",
+            evidence: "Published a systems design write-up.",
+            quality_delta: 0.12,
+            created_at: "2026-05-11T00:01:00Z",
+          },
+        ],
+        updated_at: "2026-05-11T00:01:00Z",
+      },
+      log: {
+        id: "progress-1",
+        node_id: "systems",
+        node_label: "Distributed systems",
+        evidence: "Published a systems design write-up.",
+        quality_delta: 0.12,
+        created_at: "2026-05-11T00:01:00Z",
+      },
+    }),
   };
 }
 
@@ -219,6 +246,31 @@ describe("StageApp", () => {
     expect(await screen.findByText("Become a platform engineer")).toBeInTheDocument();
     expect(screen.getByText("Distributed systems")).toBeInTheDocument();
     expect(screen.getByText("SQL evidence")).toBeInTheDocument();
+  }, 10000);
+
+  it("logs growth progress from Grow and refreshes workspace profile state", async () => {
+    const api = apiMock();
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /grow/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /Distributed systems active/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^Improve$/i }));
+    await userEvent.click(screen.getByRole("button", { name: /submit result/i }));
+    await userEvent.type(screen.getByRole("textbox", { name: /evidence/i }), "Published a systems design write-up.");
+    await userEvent.click(screen.getByRole("button", { name: /log progress/i }));
+
+    await waitFor(() =>
+      expect(api.logGrowthProgress).toHaveBeenCalledWith("systems", {
+        evidence: "Published a systems design write-up.",
+      }),
+    );
+    await waitFor(() => expect(api.getProfile).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(api.getCompleteness).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("57%")).toBeInTheDocument();
   }, 10000);
 
   it("loads the workspace when no generated page exists yet", async () => {

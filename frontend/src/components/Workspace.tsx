@@ -6,6 +6,8 @@ import type {
   GeneratedPage,
   GeneratedPageVersion,
   GrowthPlan,
+  GrowthProgressLogPayload,
+  GrowthProgressResponse,
   GrowthPlanUpsertPayload,
   JobMatchAnalysis,
   PageStyleTemplate,
@@ -70,6 +72,7 @@ interface WorkspaceProps {
   onSaveTargetedVersion?: (id: string, styleTemplate: PageStyleTemplate) => Promise<GeneratedPage>;
   onGenerateGrowthPlanFromMatch?: (id: string) => Promise<GrowthPlan>;
   onSaveGrowthPlan?: (payload: GrowthPlanUpsertPayload) => Promise<GrowthPlan>;
+  onLogGrowthProgress?: (nodeId: string, payload: GrowthProgressLogPayload) => Promise<GrowthProgressResponse>;
 }
 
 export function Workspace({
@@ -105,6 +108,7 @@ export function Workspace({
   onSaveTargetedVersion,
   onGenerateGrowthPlanFromMatch,
   onSaveGrowthPlan,
+  onLogGrowthProgress,
   pageVersions,
 }: WorkspaceProps) {
   const name = profile.name || "CareerPal user";
@@ -160,6 +164,7 @@ export function Workspace({
       onSaveTargetedVersion={onSaveTargetedVersion}
       onGenerateGrowthPlanFromMatch={onGenerateGrowthPlanFromMatch}
       onSaveGrowthPlan={onSaveGrowthPlan}
+      onLogGrowthProgress={onLogGrowthProgress}
       onLogout={onLogout}
       onPatchProfile={async (payload) => {
         const saved = await onPatchProfile(payload);

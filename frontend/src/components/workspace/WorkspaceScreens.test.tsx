@@ -124,6 +124,49 @@ describe("workspace screens", () => {
     expect(screen.queryByText("React evidence")).not.toBeInTheDocument();
   });
 
+  it("logs Grow node progress from the Improve submit flow", async () => {
+    const onLogGrowthProgress = vi.fn().mockResolvedValue({
+      plan: {
+        ...persistedGrowthPlan,
+        nodes: persistedGrowthPlan.nodes.map((node) =>
+          node.id === "root" ? { ...node, quality: 0.82, state: "active" as const } : node,
+        ),
+        progress_logs: [
+          {
+            id: "progress-1",
+            node_id: "root",
+            node_label: "Distributed systems",
+            evidence: "Published a systems design write-up.",
+            quality_delta: 0.12,
+            created_at: "2026-05-11T00:01:00Z",
+          },
+        ],
+        updated_at: "2026-05-11T00:01:00Z",
+      },
+      log: {
+        id: "progress-1",
+        node_id: "root",
+        node_label: "Distributed systems",
+        evidence: "Published a systems design write-up.",
+        quality_delta: 0.12,
+        created_at: "2026-05-11T00:01:00Z",
+      },
+    });
+    renderWorkspace({ growthPlan: persistedGrowthPlan, onLogGrowthProgress });
+
+    await userEvent.click(screen.getByRole("button", { name: /^grow$/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Distributed systems active/i }));
+    expect(screen.getByText("70%")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /^Improve$/i }));
+    await userEvent.click(screen.getByRole("button", { name: /submit result/i }));
+    await userEvent.type(screen.getByRole("textbox", { name: /evidence/i }), "Published a systems design write-up.");
+    await userEvent.click(screen.getByRole("button", { name: /log progress/i }));
+
+    expect(onLogGrowthProgress).toHaveBeenCalledWith("root", { evidence: "Published a systems design write-up." });
+    expect(await screen.findByText("82%")).toBeInTheDocument();
+  });
+
   it("opens recent match history", async () => {
     const onOpenJobMatch = vi.fn().mockResolvedValue(backendAnalysis);
     renderWorkspace({ jobMatches: [backendAnalysis], onOpenJobMatch });

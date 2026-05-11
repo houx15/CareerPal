@@ -12,6 +12,8 @@ import type {
   GeneratedPage,
   GeneratedPageVersion,
   GrowthPlan,
+  GrowthProgressLogPayload,
+  GrowthProgressResponse,
   GrowthPlanUpsertPayload,
   JobMatchAnalysis,
   PageStyleTemplate,
@@ -69,6 +71,7 @@ interface WorkspaceProps {
   onSaveTargetedVersion?: (id: string, styleTemplate: PageStyleTemplate) => Promise<GeneratedPage>;
   onGenerateGrowthPlanFromMatch?: (id: string) => Promise<GrowthPlan>;
   onSaveGrowthPlan?: (payload: GrowthPlanUpsertPayload) => Promise<GrowthPlan>;
+  onLogGrowthProgress?: (nodeId: string, payload: GrowthProgressLogPayload) => Promise<GrowthProgressResponse>;
 }
 
 type Tab = "profile" | "match" | "resume" | "grow" | "activity" | "settings";
@@ -114,6 +117,7 @@ export function Workspace({
   onSaveTargetedVersion,
   onGenerateGrowthPlanFromMatch,
   onSaveGrowthPlan,
+  onLogGrowthProgress,
   pageVersions,
 }: WorkspaceProps) {
   const { t, lang } = useLang();
@@ -364,7 +368,20 @@ export function Workspace({
           onJumpGrow={() => setTab("grow")}
         />
       ) : null}
-      {tab === "grow" ? <GrowScreen growthPlan={generatedGrowthPlan ?? growthPlan} onSaveGrowthPlan={onSaveGrowthPlan} /> : null}
+      {tab === "grow" ? (
+        <GrowScreen
+          growthPlan={generatedGrowthPlan ?? growthPlan}
+          onSaveGrowthPlan={onSaveGrowthPlan}
+          onLogGrowthProgress={async (nodeId, payload) => {
+            if (!onLogGrowthProgress) {
+              throw new Error("Growth progress logging is not available.");
+            }
+            const response = await onLogGrowthProgress(nodeId, payload);
+            setGeneratedGrowthPlan(response.plan);
+            return response;
+          }}
+        />
+      ) : null}
       {tab === "activity" ? <ActivityScreen /> : null}
       {tab === "settings" ? <SettingsScreen onLogout={onLogout} /> : null}
 

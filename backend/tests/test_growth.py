@@ -1,6 +1,6 @@
 import json
 
-from app.models.growth import GrowthPlan
+from app.models.growth import GrowthPlan, GrowthProgressLog
 from app.models.user import User
 from tests.test_page import auth_headers, create_user
 
@@ -271,3 +271,176 @@ def test_generate_growth_plan_rejects_malformed_llm_output_without_replacing_exi
     loaded = client.get("/api/growth/plan", headers=headers)
     assert loaded.json()["id"] == existing["id"]
     assert loaded.json()["goal"] == "Existing plan"
+
+
+def test_growth_progress_requires_authentication(client):
+    response = client.post(
+        "/api/growth/plan/nodes/systems/progress",
+        json={"evidence": "Published a systems design write-up with tradeoffs."},
+    )
+
+    assert response.status_code == 401
+
+
+def test_log_growth_progress_updates_node_quality_state_and_persists_log(client, db_session):
+    headers = auth_headers(client, email="growth.progress@example.com", username="growthprogress")
+    client.put("/api/growth/plan", headers=headers, json=growth_payload())
+
+    response = client.post(
+        "/api/growth/plan/nodes/systems/progress",
+        headers=headers,
+        json={"evidence": "Published a distributed systems write-up with consistency tradeoffs."},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    updated = next(node for node in body["plan"]["nodes"] if node["id"] == "systems")
+    assert updated["quality"] == 0.57
+    assert updated["state"] == "active"
+    assert body["log"]["node_id"] == "systems"
+    assert body["log"]["node_label"] == "Distributed systems"
+    assert body["log"]["evidence"] == "Published a distributed systems write-up with consistency tradeoffs."
+
+    owner = db_session.query(User).filter_by(email="growth.progress@example.com").one()
+    log = db_session.query(GrowthProgressLog).filter_by(user_id=owner.id, node_id="systems").one()
+    assert log.evidence == "Published a distributed systems write-up with consistency tradeoffs."
+    assert log.quality_delta == 0.12
+
+    loaded = client.get("/api/growth/plan", headers=headers).json()
+    reloaded_node = next(node for node in loaded["nodes"] if node["id"] == "systems")
+    assert reloaded_node["quality"] == 0.57
+    assert loaded["progress_logs"][0]["node_id"] == "systems"
+
+
+def test_log_growth_progress_marks_node_done_at_quality_threshold(client):
+    headers = auth_headers(client, email="growth.done@example.com", username="growthdone")
+    payload = growth_payload()
+    payload["nodes"][1]["quality"] = 0.9
+    client.put("/api/growth/plan", headers=headers, json=payload)
+
+    response = client.post(
+        "/api/growth/plan/nodes/systems/progress",
+        headers=headers,
+        json={"evidence": "Shipped the capstone project and documented production lessons."},
+    )
+
+    assert response.status_code == 201
+    updated = next(node for node in response.json()["plan"]["nodes"] if node["id"] == "systems")
+    assert updated["quality"] == 1
+    assert updated["state"] == "done"
+
+
+def test_log_growth_progress_rejects_locked_nodes(client, db_session):
+    headers = auth_headers(client, email="growth.locked@example.com", username="growthlocked")
+    client.put("/api/growth/plan", headers=headers, json=growth_payload())
+
+    response = client.post(
+        "/api/growth/plan/nodes/sql/progress",
+        headers=headers,
+        json={"evidence": "Tried to bypass the locked roadmap step."},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Growth node is locked"
+    loaded = client.get("/api/growth/plan", headers=headers).json()
+    locked = next(node for node in loaded["nodes"] if node["id"] == "sql")
+    assert locked["state"] == "locked"
+    assert locked["quality"] == 0
+
+    owner = db_session.query(User).filter_by(email="growth.locked@example.com").one()
+    assert db_session.query(GrowthProgressLog).filter_by(user_id=owner.id, node_id="sql").count() == 0
+
+
+def test_log_growth_progress_appends_profile_comment_note(client):
+    headers = auth_headers(client, email="growth.profile@example.com", username="growthprofile")
+    client.patch("/api/profile", headers=headers, json={"comment": "Existing summary note."})
+    client.put("/api/growth/plan", headers=headers, json=growth_payload())
+
+    response = client.post(
+        "/api/growth/plan/nodes/systems/progress",
+        headers=headers,
+        json={"evidence": "Added a benchmark section comparing queue backpressure strategies."},
+    )
+
+    assert response.status_code == 201
+    profile = client.get("/api/profile", headers=headers).json()
+    assert "Existing summary note." in profile["comment"]
+    assert "Growth evidence - Distributed systems" in profile["comment"]
+    assert "queue backpressure" in profile["comment"]
+
+
+def test_log_growth_progress_keeps_profile_note_concise_while_preserving_full_log(client, db_session):
+    headers = auth_headers(client, email="growth.concise@example.com", username="growthconcise")
+    client.put("/api/growth/plan", headers=headers, json=growth_payload())
+    long_evidence = ("Shipped " + "detailed benchmark evidence " * 120).strip()
+
+    response = client.post(
+        "/api/growth/plan/nodes/systems/progress",
+        headers=headers,
+        json={"evidence": long_evidence},
+    )
+
+    assert response.status_code == 201
+    owner = db_session.query(User).filter_by(email="growth.concise@example.com").one()
+    log = db_session.query(GrowthProgressLog).filter_by(user_id=owner.id, node_id="systems").one()
+    assert log.evidence == long_evidence
+
+    profile = client.get("/api/profile", headers=headers).json()
+    assert len(profile["comment"]) < 260
+    assert "Growth evidence - Distributed systems" in profile["comment"]
+
+
+def test_growth_plan_replacement_clears_progress_logs_for_previous_nodes(client, db_session):
+    headers = auth_headers(client, email="growth.replacelogs@example.com", username="growthreplacelogs")
+    client.put("/api/growth/plan", headers=headers, json=growth_payload())
+    client.post(
+        "/api/growth/plan/nodes/systems/progress",
+        headers=headers,
+        json={"evidence": "Published a distributed systems write-up."},
+    )
+
+    response = client.put(
+        "/api/growth/plan",
+        headers=headers,
+        json={
+            "goal": "New roadmap",
+            "nodes": [
+                {"id": "root", "label": "Start again", "state": "active", "quality": 0.1, "parent": None, "x": 0, "y": 0}
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["progress_logs"] == []
+    loaded = client.get("/api/growth/plan", headers=headers).json()
+    assert loaded["progress_logs"] == []
+
+    owner = db_session.query(User).filter_by(email="growth.replacelogs@example.com").one()
+    assert db_session.query(GrowthProgressLog).filter_by(user_id=owner.id).count() == 0
+
+
+def test_log_growth_progress_rejects_missing_plan(client):
+    headers = auth_headers(client, email="growth.missingplan@example.com", username="growthmissingplan")
+
+    response = client.post(
+        "/api/growth/plan/nodes/systems/progress",
+        headers=headers,
+        json={"evidence": "Documented a new project result."},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Growth plan not found"
+
+
+def test_log_growth_progress_rejects_unknown_node(client):
+    headers = auth_headers(client, email="growth.unknownnode@example.com", username="growthunknownnode")
+    client.put("/api/growth/plan", headers=headers, json=growth_payload())
+
+    response = client.post(
+        "/api/growth/plan/nodes/unknown/progress",
+        headers=headers,
+        json={"evidence": "Documented a new project result."},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Growth node not found"
