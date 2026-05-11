@@ -29,6 +29,17 @@ const persistedGrowthPlan: GrowthPlan = {
   updated_at: "2026-05-11T00:00:00Z",
 };
 
+const generatedGrowthPlan: GrowthPlan = {
+  id: "growth-generated-1",
+  goal: "Close Frontend Engineer gaps",
+  nodes: [
+    { id: "root", label: "Frontend Engineer readiness", state: "done", quality: 1, parent: null, x: 0, y: 0 },
+    { id: "typescript", label: "TypeScript evidence", state: "active", quality: 0.25, parent: "root", x: -160, y: 140 },
+  ],
+  created_at: "2026-05-11T00:00:00Z",
+  updated_at: "2026-05-11T00:00:00Z",
+};
+
 function renderWorkspace(props: Partial<Parameters<typeof Workspace>[0]> = {}) {
   render(
     <LangProvider>
@@ -85,6 +96,21 @@ describe("workspace screens", () => {
     await userEvent.click(growActions[0]);
 
     expect(screen.getByText(/grow your craft/i)).toBeInTheDocument();
+  });
+
+  it("generates a roadmap from match gaps and opens Grow", async () => {
+    const onCreateJobMatch = vi.fn().mockResolvedValue(backendAnalysis);
+    const onGenerateGrowthPlanFromMatch = vi.fn().mockResolvedValue(generatedGrowthPlan);
+    renderWorkspace({ onCreateJobMatch, onGenerateGrowthPlanFromMatch });
+
+    await userEvent.click(screen.getByRole("button", { name: /^match$/i }));
+    await userEvent.type(screen.getByPlaceholderText(/job description|role you're aiming/i), "Frontend internship using React");
+    await userEvent.click(screen.getByRole("button", { name: /analyze/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /generate roadmap/i }));
+
+    expect(onGenerateGrowthPlanFromMatch).toHaveBeenCalledWith("match-1");
+    expect(await screen.findByText("Close Frontend Engineer gaps")).toBeInTheDocument();
+    expect(screen.getByText("TypeScript evidence")).toBeInTheDocument();
   });
 
   it("renders the persisted growth plan on the Grow screen", async () => {

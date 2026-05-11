@@ -2,6 +2,7 @@ import type {
   AuthResponse,
   AnalyzeJobMatchPayload,
   CustomizePagePayload,
+  GenerateGrowthPlanPayload,
   GeneratedPage,
   JobMatchAnalysis,
   JobMatchHistory,
@@ -122,6 +123,10 @@ export class ApiClient {
 
   saveGrowthPlan(payload: GrowthPlanUpsertPayload): Promise<GrowthPlan> {
     return this.request("/api/growth/plan", { method: "PUT", body: payload, auth: true });
+  }
+
+  generateGrowthPlan(payload: GenerateGrowthPlanPayload): Promise<GrowthPlan> {
+    return this.request("/api/growth/plan/generate", { method: "POST", body: payload, auth: true });
   }
 
   customizePage(payload: CustomizePagePayload): Promise<GeneratedPage> {

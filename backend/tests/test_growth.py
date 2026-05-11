@@ -1,6 +1,19 @@
+import json
+
 from app.models.growth import GrowthPlan
 from app.models.user import User
 from tests.test_page import auth_headers, create_user
+
+
+class CapturingGrowthLLMClient:
+    def __init__(self, chunks: list[str]):
+        self.chunks = chunks
+        self.messages = None
+
+    async def stream_chat(self, messages):
+        self.messages = list(messages)
+        for chunk in self.chunks:
+            yield chunk
 
 
 def growth_payload(goal: str = "Become a platform engineer"):
@@ -147,3 +160,114 @@ def test_growth_plan_rejects_parent_cycles(client):
 
     assert response.status_code == 422
     assert "cycle" in str(response.json()["detail"]).lower()
+
+
+def test_generate_growth_plan_requires_authentication(client):
+    response = client.post("/api/growth/plan/generate", json={"match_analysis_id": "match-1"})
+
+    assert response.status_code == 401
+
+
+def test_generate_growth_plan_from_match_persists_fake_llm_tree(client, monkeypatch):
+    headers = auth_headers(client, email="growth.generate@example.com", username="growthgenerate")
+    match = client.post(
+        "/api/match/analyze",
+        headers=headers,
+        json={"job_description": "Company: Stripe\nRole: Backend Intern\nPython, SQL, and distributed systems."},
+    ).json()
+    provider_payload = {
+        "goal": "Close Backend Intern gaps",
+        "nodes": [
+            {"id": "root", "label": "Backend Intern readiness", "state": "done", "quality": 1, "parent": None, "x": 0, "y": 0},
+            {"id": "sql", "label": "SQL reliability evidence", "state": "active", "quality": 0.25, "parent": "root", "x": -160, "y": 140},
+            {
+                "id": "systems",
+                "label": "Distributed systems project",
+                "state": "locked",
+                "quality": 0,
+                "parent": "sql",
+                "x": -260,
+                "y": 280,
+            },
+        ],
+    }
+    fake_client = CapturingGrowthLLMClient([json.dumps(provider_payload)])
+
+    from app.api import growth as growth_api
+
+    monkeypatch.setattr(growth_api, "build_llm_client", lambda settings: fake_client)
+
+    response = client.post("/api/growth/plan/generate", headers=headers, json={"match_analysis_id": match["id"]})
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["goal"] == "Close Backend Intern gaps"
+    assert body["nodes"][1]["id"] == "sql"
+    assert body["nodes"][1]["state"] == "active"
+
+    loaded = client.get("/api/growth/plan", headers=headers)
+    assert loaded.status_code == 200
+    assert loaded.json()["id"] == body["id"]
+    assert loaded.json()["nodes"] == provider_payload["nodes"]
+
+    assert fake_client.messages is not None
+    prompt = "\n".join(message.content for message in fake_client.messages)
+    assert "CareerPal's growth roadmap strategist" in prompt
+    assert "SQL" in prompt
+    assert "Backend Intern" in prompt
+    assert "Return only JSON" in prompt
+
+
+def test_generate_growth_plan_default_fake_provider_uses_match_role(client):
+    headers = auth_headers(client, email="growth.defaultfake@example.com", username="growthdefaultfake")
+    match = client.post(
+        "/api/match/analyze",
+        headers=headers,
+        json={"job_description": "Company: Stripe\nRole: Backend Intern\nPython, SQL, and distributed systems."},
+    ).json()
+
+    response = client.post("/api/growth/plan/generate", headers=headers, json={"match_analysis_id": match["id"]})
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["goal"] == "Close Backend Intern gaps"
+    assert body["nodes"][0]["label"] == "Backend Intern readiness"
+    assert any(node["label"] == "Build SQL evidence" for node in body["nodes"])
+
+
+def test_generate_growth_plan_rejects_other_users_match(client):
+    owner_headers = auth_headers(client, email="growth.genowner@example.com", username="growthgenowner")
+    other_headers = auth_headers(client, email="growth.genother@example.com", username="growthgenother")
+    match = client.post(
+        "/api/match/analyze",
+        headers=owner_headers,
+        json={"job_description": "Backend Intern at Stripe\nPython and SQL role."},
+    ).json()
+
+    response = client.post("/api/growth/plan/generate", headers=other_headers, json={"match_analysis_id": match["id"]})
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Match analysis not found"
+
+
+def test_generate_growth_plan_rejects_malformed_llm_output_without_replacing_existing_plan(client, monkeypatch):
+    headers = auth_headers(client, email="growth.badllm@example.com", username="growthbadllm")
+    match = client.post(
+        "/api/match/analyze",
+        headers=headers,
+        json={"job_description": "Frontend Engineer at Vercel\nReact and TypeScript role."},
+    ).json()
+    existing = client.put("/api/growth/plan", headers=headers, json=growth_payload("Existing plan")).json()
+    fake_client = CapturingGrowthLLMClient(["not json"])
+
+    from app.api import growth as growth_api
+
+    monkeypatch.setattr(growth_api, "build_llm_client", lambda settings: fake_client)
+
+    response = client.post("/api/growth/plan/generate", headers=headers, json={"match_analysis_id": match["id"]})
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "LLM provider returned invalid growth roadmap"
+    loaded = client.get("/api/growth/plan", headers=headers)
+    assert loaded.json()["id"] == existing["id"]
+    assert loaded.json()["goal"] == "Existing plan"

@@ -62,10 +62,12 @@ interface WorkspaceProps {
   jobMatches?: JobMatchAnalysis[];
   isAnalyzingJobMatch?: boolean;
   isSavingTargetedVersion?: boolean;
+  isGeneratingGrowthPlan?: boolean;
   jobMatchError?: string | null;
   onCreateJobMatch?: (jobDescription: string) => Promise<JobMatchAnalysis>;
   onOpenJobMatch?: (id: string) => Promise<JobMatchAnalysis>;
   onSaveTargetedVersion?: (id: string, styleTemplate: PageStyleTemplate) => Promise<GeneratedPage>;
+  onGenerateGrowthPlanFromMatch?: (id: string) => Promise<GrowthPlan>;
   onSaveGrowthPlan?: (payload: GrowthPlanUpsertPayload) => Promise<GrowthPlan>;
 }
 
@@ -105,10 +107,12 @@ export function Workspace({
   jobMatches,
   isAnalyzingJobMatch,
   isSavingTargetedVersion,
+  isGeneratingGrowthPlan,
   jobMatchError,
   onCreateJobMatch,
   onOpenJobMatch,
   onSaveTargetedVersion,
+  onGenerateGrowthPlanFromMatch,
   onSaveGrowthPlan,
   pageVersions,
 }: WorkspaceProps) {
@@ -118,6 +122,7 @@ export function Workspace({
   const [editSection, setEditSection] = useState<ProfileSectionId | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [savedProfile, setSavedProfile] = useState<ProfilePatch>({});
+  const [generatedGrowthPlan, setGeneratedGrowthPlan] = useState<GrowthPlan | null>(null);
   const [localSectionOverrides, setLocalSectionOverrides] = useState<Set<ProfileSectionId>>(new Set());
   const lastCompletenessRef = useRef<WorkspaceProps["completeness"] | undefined>(undefined);
   useEffect(() => {
@@ -271,6 +276,16 @@ export function Workspace({
     onOpenConversation?.(section);
   }
 
+  async function generateGrowthPlanFromMatch(id: string): Promise<GrowthPlan> {
+    if (!onGenerateGrowthPlanFromMatch) {
+      throw new Error("Growth roadmap generation is not available.");
+    }
+    const plan = await onGenerateGrowthPlanFromMatch(id);
+    setGeneratedGrowthPlan(plan);
+    setTab("grow");
+    return plan;
+  }
+
   async function patchProfile(payload: ProfilePatch): Promise<void> {
     setLocalSectionOverrides(sectionOverridesForPatch(payload));
     const nextProfile = onPatchProfile ? await onPatchProfile(payload) : payload;
@@ -340,14 +355,16 @@ export function Workspace({
           jobMatches={jobMatches}
           isAnalyzingJobMatch={isAnalyzingJobMatch}
           isSavingTargetedVersion={isSavingTargetedVersion}
+          isGeneratingGrowthPlan={isGeneratingGrowthPlan}
           jobMatchError={jobMatchError}
           onCreateJobMatch={onCreateJobMatch}
           onOpenJobMatch={onOpenJobMatch}
           onSaveTargetedVersion={onSaveTargetedVersion}
+          onGenerateGrowthPlanFromMatch={onGenerateGrowthPlanFromMatch ? generateGrowthPlanFromMatch : undefined}
           onJumpGrow={() => setTab("grow")}
         />
       ) : null}
-      {tab === "grow" ? <GrowScreen growthPlan={growthPlan} onSaveGrowthPlan={onSaveGrowthPlan} /> : null}
+      {tab === "grow" ? <GrowScreen growthPlan={generatedGrowthPlan ?? growthPlan} onSaveGrowthPlan={onSaveGrowthPlan} /> : null}
       {tab === "activity" ? <ActivityScreen /> : null}
       {tab === "settings" ? <SettingsScreen onLogout={onLogout} /> : null}
 

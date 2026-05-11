@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { DemoProfile } from "../../fixtures/careerpalDemoData";
-import type { GeneratedPage, JobMatchAnalysis, PageStyleTemplate } from "../../lib/types";
+import type { GeneratedPage, GrowthPlan, JobMatchAnalysis, PageStyleTemplate } from "../../lib/types";
 import { Slime } from "../Slime";
 
 export function MatchScreen({
@@ -10,20 +10,24 @@ export function MatchScreen({
   jobMatches = [],
   isAnalyzingJobMatch = false,
   isSavingTargetedVersion = false,
+  isGeneratingGrowthPlan = false,
   jobMatchError,
   onCreateJobMatch,
   onOpenJobMatch,
   onSaveTargetedVersion,
+  onGenerateGrowthPlanFromMatch,
   onJumpGrow,
 }: {
   profile: DemoProfile;
   jobMatches?: JobMatchAnalysis[];
   isAnalyzingJobMatch?: boolean;
   isSavingTargetedVersion?: boolean;
+  isGeneratingGrowthPlan?: boolean;
   jobMatchError?: string | null;
   onCreateJobMatch?: (jobDescription: string) => Promise<JobMatchAnalysis>;
   onOpenJobMatch?: (id: string) => Promise<JobMatchAnalysis>;
   onSaveTargetedVersion?: (id: string, styleTemplate: PageStyleTemplate) => Promise<GeneratedPage>;
+  onGenerateGrowthPlanFromMatch?: (id: string) => Promise<GrowthPlan>;
   onJumpGrow?: () => void;
 }) {
   const [jd, setJd] = useState("");
@@ -76,9 +80,11 @@ export function MatchScreen({
         <MatchResult
           analysis={result}
           isSavingTargetedVersion={isSavingTargetedVersion}
+          isGeneratingGrowthPlan={isGeneratingGrowthPlan}
           onBack={() => setResult(null)}
           onJumpGrow={onJumpGrow}
           onSaveTargetedVersion={onSaveTargetedVersion ? saveTargetedVersion : undefined}
+          onGenerateGrowthPlanFromMatch={onGenerateGrowthPlanFromMatch}
         />
       </div>
     );
@@ -139,17 +145,22 @@ export function MatchScreen({
 function MatchResult({
   analysis,
   isSavingTargetedVersion,
+  isGeneratingGrowthPlan,
   onBack,
   onJumpGrow,
   onSaveTargetedVersion,
+  onGenerateGrowthPlanFromMatch,
 }: {
   analysis: JobMatchAnalysis;
   isSavingTargetedVersion?: boolean;
+  isGeneratingGrowthPlan?: boolean;
   onBack: () => void;
   onJumpGrow?: () => void;
   onSaveTargetedVersion?: (id: string, styleTemplate: PageStyleTemplate) => Promise<GeneratedPage>;
+  onGenerateGrowthPlanFromMatch?: (id: string) => Promise<GrowthPlan>;
 }) {
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [roadmapError, setRoadmapError] = useState<string | null>(null);
   const [savedVersion, setSavedVersion] = useState<number | null>(analysis.saved_page_version ?? null);
 
   async function saveTargetedVersion() {
@@ -162,6 +173,18 @@ function MatchResult({
       setSavedVersion(page.version);
     } catch (caught) {
       setSaveError(caught instanceof Error ? caught.message : "Could not save targeted version.");
+    }
+  }
+
+  async function generateRoadmap() {
+    if (!onGenerateGrowthPlanFromMatch) {
+      return;
+    }
+    setRoadmapError(null);
+    try {
+      await onGenerateGrowthPlanFromMatch(analysis.id);
+    } catch (caught) {
+      setRoadmapError(caught instanceof Error ? caught.message : "Could not generate roadmap.");
     }
   }
 
@@ -225,12 +248,17 @@ function MatchResult({
         <article className="panel">
           <div className="profile-card-title" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
             <span>Gaps</span>
-            {onJumpGrow ? (
+            {onGenerateGrowthPlanFromMatch ? (
+              <button className="btn btn-accent btn-sm" type="button" disabled={isGeneratingGrowthPlan} onClick={generateRoadmap}>
+                {isGeneratingGrowthPlan ? "Generating..." : "Generate roadmap"}
+              </button>
+            ) : onJumpGrow ? (
               <button className="btn btn-ghost btn-sm" type="button" onClick={onJumpGrow}>
                 Open Grow
               </button>
             ) : null}
           </div>
+          {roadmapError ? <div className="form-error">{roadmapError}</div> : null}
           <ul className="match-list">
             {analysis.gaps.map((item) => (
               <li key={item}>

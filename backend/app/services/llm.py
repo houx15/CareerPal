@@ -31,6 +31,10 @@ class FakeLLMClient:
             job_description = next((message.content for message in messages if message.role == "user"), "")
             yield json.dumps(_fake_match_analysis(job_description))
             return
+        if any("CareerPal's growth roadmap strategist" in message.content for message in messages if message.role == "system"):
+            match_context = next((message.content for message in messages if message.role == "user"), "")
+            yield json.dumps(_fake_growth_roadmap(match_context))
+            return
         for chunk in [
             "I noted that. ",
             "Tell me one concrete impact or result ",
@@ -67,6 +71,67 @@ def _fake_match_analysis(job_description: str) -> dict[str, object]:
         "gaps": gaps,
         "suggestions": suggestions,
     }
+
+
+def _fake_growth_roadmap(match_context: str) -> dict[str, object]:
+    match_payload = _fake_match_context_payload(match_context)
+    lower = match_context.lower()
+    role = _clean_fake_string(match_payload.get("role")) or _detect_fake_label(match_context, ["role"]) or "target role"
+    nodes: list[dict[str, object]] = [
+        {
+            "id": "root",
+            "label": f"{role[:80]} readiness",
+            "state": "done",
+            "quality": 1,
+            "parent": None,
+            "x": 0,
+            "y": 0,
+        }
+    ]
+    gap_keywords = ["sql", "typescript", "distributed systems", "python", "react"]
+    missing = [keyword for keyword in gap_keywords if keyword in lower][:3]
+    if not missing:
+        missing = ["role-specific evidence"]
+    for index, keyword in enumerate(missing):
+        node_id = keyword.replace(" ", "-")
+        parent = "root" if index == 0 else missing[index - 1].replace(" ", "-")
+        state = "active" if index == 0 else "locked"
+        nodes.append(
+            {
+                "id": node_id,
+                "label": f"Build {_display_fake_keyword(keyword)} evidence",
+                "state": state,
+                "quality": 0.25 if state == "active" else 0,
+                "parent": parent,
+                "x": -180 + index * 180,
+                "y": 140 + index * 120,
+            }
+        )
+    return {"goal": f"Close {role[:80]} gaps", "nodes": nodes}
+
+
+def _fake_match_context_payload(match_context: str) -> dict[str, object]:
+    raw_payload = match_context.removeprefix("Match analysis JSON:\n").strip()
+    try:
+        payload = json.loads(raw_payload)
+    except json.JSONDecodeError:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _clean_fake_string(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _display_fake_keyword(keyword: str) -> str:
+    if keyword == "sql":
+        return "SQL"
+    if keyword == "typescript":
+        return "TypeScript"
+    return keyword
 
 
 def _detect_fake_label(text: str, labels: list[str]) -> str | None:

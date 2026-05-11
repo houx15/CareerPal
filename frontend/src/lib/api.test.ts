@@ -297,6 +297,32 @@ describe("ApiClient", () => {
     });
   });
 
+  it("generates a growth plan from a match with bearer auth", async () => {
+    const plan: GrowthPlan = {
+      id: "growth-1",
+      goal: "Close Backend Intern gaps",
+      nodes: [{ id: "root", label: "Start", state: "done", quality: 1, parent: null, x: 0, y: 0 }],
+      created_at: "2026-05-11T00:00:00Z",
+      updated_at: "2026-05-11T00:00:00Z",
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      headers: new Headers({ "Content-Type": "application/json" }),
+      json: async () => plan,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.generateGrowthPlan({ match_analysis_id: "match-1" });
+
+    expect(result).toEqual(plan);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/growth/plan/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token-123" },
+      body: JSON.stringify({ match_analysis_id: "match-1" }),
+    });
+  });
+
 
   it("customizes a profile page from an SSE done payload with bearer auth", async () => {
     const page = {

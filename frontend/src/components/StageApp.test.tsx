@@ -45,6 +45,16 @@ const growthPlan = {
   updated_at: "2026-05-11T00:00:00Z",
 };
 
+const generatedGrowthPlan = {
+  ...growthPlan,
+  id: "growth-generated-1",
+  goal: "Close Frontend Engineer gaps",
+  nodes: [
+    { id: "root", label: "Frontend Engineer readiness", state: "done" as const, quality: 1, parent: null, x: 0, y: 0 },
+    { id: "typescript", label: "TypeScript evidence", state: "active" as const, quality: 0.25, parent: "root", x: -160, y: 140 },
+  ],
+};
+
 function apiMock() {
   return {
     register: vi
@@ -123,6 +133,7 @@ function apiMock() {
     saveJobMatchVersion: vi.fn().mockResolvedValue(targetedPageVersion),
     getGrowthPlan: vi.fn().mockResolvedValue(growthPlan),
     saveGrowthPlan: vi.fn().mockResolvedValue(growthPlan),
+    generateGrowthPlan: vi.fn().mockResolvedValue(generatedGrowthPlan),
   };
 }
 
@@ -512,6 +523,28 @@ describe("StageApp", () => {
 
     expect(await screen.findByText(/Frontend Engineer at Vercel/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Version 2 · Terminal/i).length).toBeGreaterThan(0);
+  }, 10000);
+
+  it("generates a growth roadmap from a match and opens the Grow tree", async () => {
+    const api = apiMock();
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /match/i }));
+
+    await userEvent.type(
+      await screen.findByRole("textbox", { name: /job description/i }),
+      "Company: Vercel\nRole: Frontend Engineer\nReact and TypeScript role.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /analyze/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /generate roadmap/i }));
+
+    await waitFor(() => expect(api.generateGrowthPlan).toHaveBeenCalledWith({ match_analysis_id: "match-1" }));
+    expect(await screen.findByText("Close Frontend Engineer gaps")).toBeInTheDocument();
+    expect(screen.getByText("TypeScript evidence")).toBeInTheDocument();
   }, 10000);
 
   it("shows an export error when PDF download fails", async () => {

@@ -228,6 +228,10 @@ export interface GrowthPlanUpsertPayload {
   nodes: GrowthPlanNode[];
 }
 
+export interface GenerateGrowthPlanPayload {
+  match_analysis_id: string;
+}
+
 export interface JobMatchAnalysis {
   id: string;
   job_description: string;

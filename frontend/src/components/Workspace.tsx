@@ -63,10 +63,12 @@ interface WorkspaceProps {
   jobMatches?: JobMatchAnalysis[];
   isAnalyzingJobMatch?: boolean;
   isSavingTargetedVersion?: boolean;
+  isGeneratingGrowthPlan?: boolean;
   jobMatchError?: string | null;
   onCreateJobMatch?: (jobDescription: string) => Promise<JobMatchAnalysis>;
   onOpenJobMatch?: (id: string) => Promise<JobMatchAnalysis>;
   onSaveTargetedVersion?: (id: string, styleTemplate: PageStyleTemplate) => Promise<GeneratedPage>;
+  onGenerateGrowthPlanFromMatch?: (id: string) => Promise<GrowthPlan>;
   onSaveGrowthPlan?: (payload: GrowthPlanUpsertPayload) => Promise<GrowthPlan>;
 }
 
@@ -96,10 +98,12 @@ export function Workspace({
   jobMatches,
   isAnalyzingJobMatch,
   isSavingTargetedVersion,
+  isGeneratingGrowthPlan,
   jobMatchError,
   onCreateJobMatch,
   onOpenJobMatch,
   onSaveTargetedVersion,
+  onGenerateGrowthPlanFromMatch,
   onSaveGrowthPlan,
   pageVersions,
 }: WorkspaceProps) {
@@ -149,10 +153,12 @@ export function Workspace({
       jobMatches={jobMatches}
       isAnalyzingJobMatch={isAnalyzingJobMatch}
       isSavingTargetedVersion={isSavingTargetedVersion}
+      isGeneratingGrowthPlan={isGeneratingGrowthPlan}
       jobMatchError={jobMatchError}
       onCreateJobMatch={onCreateJobMatch}
       onOpenJobMatch={onOpenJobMatch}
       onSaveTargetedVersion={onSaveTargetedVersion}
+      onGenerateGrowthPlanFromMatch={onGenerateGrowthPlanFromMatch}
       onSaveGrowthPlan={onSaveGrowthPlan}
       onLogout={onLogout}
       onPatchProfile={async (payload) => {

@@ -59,6 +59,12 @@ class GrowthPlanUpsert(BaseModel):
         return self
 
 
+class GrowthPlanGenerateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    match_analysis_id: str = Field(min_length=1)
+
+
 class GrowthPlanResponse(BaseModel):
     id: str
     goal: str

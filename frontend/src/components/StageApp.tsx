@@ -8,6 +8,7 @@ import type {
   Conversation,
   ConversationMessage,
   CustomizePagePayload,
+  GenerateGrowthPlanPayload,
   GeneratedPage,
   GeneratedPageVersion,
   GeneratedPageVersionsResponse,
@@ -55,6 +56,7 @@ export interface StageApi {
   updatePageSettings?(payload: PageSettingsPayload): Promise<GeneratedPage>;
   getGrowthPlan?(): Promise<GrowthPlan>;
   saveGrowthPlan?(payload: GrowthPlanUpsertPayload): Promise<GrowthPlan>;
+  generateGrowthPlan?(payload: GenerateGrowthPlanPayload): Promise<GrowthPlan>;
   exportProfilePdf?(): Promise<PdfExport>;
   analyzeJobMatch?(payload: AnalyzeJobMatchPayload): Promise<JobMatchAnalysis>;
   listJobMatches?(): Promise<JobMatchHistory>;
@@ -97,6 +99,7 @@ function StageAppInner({ api }: StageAppProps) {
   const [jobMatches, setJobMatches] = useState<JobMatchAnalysis[]>([]);
   const [isAnalyzingJobMatch, setIsAnalyzingJobMatch] = useState(false);
   const [isSavingTargetedVersion, setIsSavingTargetedVersion] = useState(false);
+  const [isGeneratingGrowthPlan, setIsGeneratingGrowthPlan] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [jobMatchError, setJobMatchError] = useState<string | null>(null);
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
@@ -195,6 +198,7 @@ function StageAppInner({ api }: StageAppProps) {
     setJobMatches([]);
     setIsAnalyzingJobMatch(false);
     setIsSavingTargetedVersion(false);
+    setIsGeneratingGrowthPlan(false);
     setPageError(null);
     setJobMatchError(null);
     setPendingEmail("");
@@ -545,6 +549,27 @@ function StageAppInner({ api }: StageAppProps) {
     }
   }
 
+  async function handleGenerateGrowthPlanFromMatch(id: string): Promise<GrowthPlan> {
+    if (!client.generateGrowthPlan) {
+      throw new Error("Growth roadmap generation is not available.");
+    }
+
+    setIsGeneratingGrowthPlan(true);
+    setJobMatchError(null);
+
+    try {
+      const plan = await client.generateGrowthPlan({ match_analysis_id: id });
+      setGrowthPlan(plan);
+      return plan;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Could not generate roadmap.";
+      setJobMatchError(message);
+      throw new Error(message);
+    } finally {
+      setIsGeneratingGrowthPlan(false);
+    }
+  }
+
   function handleOpenPublicPage(url: string): void {
     if (typeof window === "undefined") {
       return;
@@ -633,6 +658,7 @@ function StageAppInner({ api }: StageAppProps) {
       jobMatches={jobMatches}
       isAnalyzingJobMatch={isAnalyzingJobMatch}
       isSavingTargetedVersion={isSavingTargetedVersion}
+      isGeneratingGrowthPlan={isGeneratingGrowthPlan}
       jobMatchError={jobMatchError}
       onGeneratePage={handleGeneratePage}
       onExportPdf={handleDownloadPdf}
@@ -643,6 +669,7 @@ function StageAppInner({ api }: StageAppProps) {
       onCreateJobMatch={handleCreateJobMatch}
       onOpenJobMatch={handleOpenJobMatch}
       onSaveTargetedVersion={handleSaveTargetedVersion}
+      onGenerateGrowthPlanFromMatch={handleGenerateGrowthPlanFromMatch}
       onSaveGrowthPlan={handleSaveGrowthPlan}
       onLogout={handleLogout}
       onPatchProfile={handlePatchProfile}
