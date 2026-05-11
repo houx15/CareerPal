@@ -167,6 +167,7 @@ function apiMock() {
 describe("StageApp", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    window.localStorage.clear();
     if (originalApiBaseUrl === undefined) {
       delete process.env.NEXT_PUBLIC_API_BASE_URL;
     } else {
@@ -232,6 +233,39 @@ describe("StageApp", () => {
     expect(screen.queryByText(/what should i call you/i)).not.toBeInTheDocument();
   }, 10000);
 
+  it("returns to login with a clear message when the saved session expires during workspace load", async () => {
+    const api = apiMock();
+    api.getProfile.mockRejectedValue(new ApiError(401, "Token expired"));
+    window.localStorage.setItem("careerpal.accessToken", "old-token");
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+
+    expect(await screen.findByText("Token expired")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /log in/i })).toBeInTheDocument();
+    expect(screen.queryByText(/profile completion/i)).not.toBeInTheDocument();
+    expect(window.localStorage.getItem("careerpal.accessToken")).toBeNull();
+  }, 10000);
+
+  it("keeps login usable with a clear message when workspace loading hits a network failure", async () => {
+    const api = apiMock();
+    api.getProfile.mockRejectedValue(new Error("Network unavailable"));
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+
+    expect(await screen.findByText("Network unavailable")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^email$/i)).toHaveValue("alex@example.com");
+    expect(screen.getByRole("button", { name: /log in/i })).toBeEnabled();
+    expect(window.localStorage.getItem("careerpal.accessToken")).toBe("token-123");
+  }, 10000);
+
   it("loads a persisted growth plan into the Grow screen after login", async () => {
     const api = apiMock();
     render(<StageApp api={api} />);
@@ -284,6 +318,50 @@ describe("StageApp", () => {
 
     await waitFor(() => expect(api.getPagePreview).toHaveBeenCalled());
     expect(await screen.findByText(/profile completion/i)).toBeInTheDocument();
+  }, 10000);
+
+  it("loads an explicitly empty persisted profile without leaking prototype demo content", async () => {
+    const api = apiMock();
+    api.getProfile.mockResolvedValue({
+      updated_at: "2026-05-05T00:00:00Z",
+      name: null,
+      phone: null,
+      contact_email: null,
+      location: null,
+      headline: null,
+      target_direction: null,
+      comment: null,
+      education: [],
+      experience: [],
+      projects: [],
+      skills: [],
+      certificates: [],
+    });
+    api.getCompleteness.mockResolvedValue({
+      overall: "empty",
+      sections: {
+        basics: "empty",
+        summary: "empty",
+        education: "empty",
+        experience: "empty",
+        projects: "empty",
+        skills: "empty",
+        certificates: "empty",
+      },
+    });
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+
+    expect(await screen.findByText(/profile completion/i)).toBeInTheDocument();
+    expect(screen.queryByText("Senior Product Designer")).not.toBeInTheDocument();
+    expect(screen.queryByText(/8 years designing tools for makers/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Linear")).not.toBeInTheDocument();
+    expect(screen.queryByText("Product strategy")).not.toBeInTheDocument();
+    expect(screen.queryByText("Carnegie Mellon")).not.toBeInTheDocument();
   }, 10000);
 
   it("generates a page from the resume screen and renders the returned preview", async () => {

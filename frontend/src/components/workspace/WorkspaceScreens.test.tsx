@@ -167,6 +167,22 @@ describe("workspace screens", () => {
     expect(await screen.findByText("82%")).toBeInTheDocument();
   });
 
+  it("keeps the Grow improve overlay open with evidence when progress logging fails", async () => {
+    const onLogGrowthProgress = vi.fn().mockRejectedValue(new Error("Could not save progress."));
+    renderWorkspace({ growthPlan: persistedGrowthPlan, onLogGrowthProgress });
+
+    await userEvent.click(screen.getByRole("button", { name: /^grow$/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Distributed systems active/i }));
+    await userEvent.click(screen.getByRole("button", { name: /^Improve$/i }));
+    await userEvent.click(screen.getByRole("button", { name: /submit result/i }));
+    await userEvent.type(screen.getByRole("textbox", { name: /evidence/i }), "Published a systems design write-up.");
+    await userEvent.click(screen.getByRole("button", { name: /log progress/i }));
+
+    expect(await screen.findByText("Could not save progress.")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: /Improve Distributed systems/i })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /evidence/i })).toHaveValue("Published a systems design write-up.");
+  });
+
   it("opens recent match history", async () => {
     const onOpenJobMatch = vi.fn().mockResolvedValue(backendAnalysis);
     renderWorkspace({ jobMatches: [backendAnalysis], onOpenJobMatch });

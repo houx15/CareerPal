@@ -81,6 +81,42 @@ describe("Workspace", () => {
     expect(screen.getAllByText("Alex Chen").length).toBeGreaterThan(0);
   });
 
+  it("keeps an explicitly empty persisted profile empty instead of showing demo content", () => {
+    renderWorkspace({
+      profile: {
+        name: null,
+        headline: null,
+        target_direction: null,
+        comment: null,
+        education: [],
+        experience: [],
+        projects: [],
+        skills: [],
+        certificates: [],
+      },
+      completeness: {
+        sections: {
+          basics: "empty",
+          summary: "empty",
+          education: "empty",
+          experience: "empty",
+          projects: "empty",
+          skills: "empty",
+          certificates: "empty",
+        },
+      },
+    });
+
+    expect(screen.getByText("CareerPal")).toBeInTheDocument();
+    expect(screen.getByText(/profile completion/i)).toBeInTheDocument();
+    expect(screen.queryByText("Senior Product Designer")).not.toBeInTheDocument();
+    expect(screen.queryByText(/8 years designing tools for makers/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Linear")).not.toBeInTheDocument();
+    expect(screen.queryByText("Product strategy")).not.toBeInTheDocument();
+    expect(screen.queryByText("Carnegie Mellon")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /edit/i }).length).toBeGreaterThan(0);
+  });
+
   it("opens edit drawer from a profile card and can switch to chat improvement", async () => {
     renderWorkspace();
 

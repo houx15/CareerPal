@@ -115,6 +115,7 @@ function StageAppInner({ api }: StageAppProps) {
   const client = useMemo<StageApi>(() => api ?? createBrowserApi(readStoredToken), [api]);
 
   async function handleAuth(action: "register" | "login", payload: AuthPayload | LoginPayload) {
+    setWorkspaceError(null);
     const result =
       action === "register" ? await client.register(payload as AuthPayload) : await client.login(payload as LoginPayload);
     storeToken(result.access_token);
@@ -175,6 +176,10 @@ function StageAppInner({ api }: StageAppProps) {
       setStage("workspace");
     } catch (caught) {
       if (workspaceRequestIdRef.current === requestId) {
+        if (caught instanceof ApiError && caught.status === 401) {
+          storeToken(null);
+          setStage("login");
+        }
         setWorkspaceError(caught instanceof Error ? caught.message : "Could not load your workspace.");
       }
     } finally {
@@ -606,6 +611,7 @@ function StageAppInner({ api }: StageAppProps) {
         onBack={() => setStage("intro")}
         onLogin={(payload) => handleAuth("login", payload)}
         onGoSignup={() => setStage("signup")}
+        initialError={workspaceError}
       />
     );
   }

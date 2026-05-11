@@ -8,6 +8,7 @@ interface LoginScreenProps {
   onBack: () => void;
   onLogin: (payload: { email: string; password: string }) => Promise<void>;
   onGoSignup: () => void;
+  initialError?: string | null;
 }
 
 interface SignUpScreenProps {
@@ -16,7 +17,7 @@ interface SignUpScreenProps {
   onGoLogin: () => void;
 }
 
-export function LoginScreen({ onBack, onLogin, onGoSignup }: LoginScreenProps) {
+export function LoginScreen({ onBack, onLogin, onGoSignup, initialError }: LoginScreenProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +71,7 @@ export function LoginScreen({ onBack, onLogin, onGoSignup }: LoginScreenProps) {
               onChange={(event) => setPassword(event.target.value)}
             />
           </div>
-          {error ? <p className="form-error">{error}</p> : null}
+          {error || initialError ? <p className="form-error">{error ?? initialError}</p> : null}
           <button type="submit" className="btn btn-accent btn-lg login-action" disabled={!canSubmit || isSubmitting}>
             Log in<span style={{ fontSize: 14 }}>→</span>
           </button>

@@ -156,12 +156,15 @@ export function Workspace({
         ...sampleProfiles[lang],
         name: savedProfile.name ?? persistedProfile?.name ?? user.name,
         initials: user.initials,
-        email: savedProfile.contact_email ?? persistedProfile?.contact_email ?? user.email,
+        email:
+          savedProfile.contact_email ??
+          (persistedProfile?.contact_email !== undefined ? persistedProfile.contact_email ?? user.email : user.email),
         handle: user.handle,
-        role: savedProfile.headline ?? persistedProfile?.headline ?? sampleProfiles[lang].role,
-        location: savedProfile.location ?? persistedProfile?.location ?? sampleProfiles[lang].location,
-        phone: savedProfile.phone ?? persistedProfile?.phone ?? sampleProfiles[lang].phone,
-        summary: savedProfile.comment ?? persistedProfile?.comment ?? sampleProfiles[lang].summary,
+        role: savedProfile.headline ?? (persistedProfile?.headline !== undefined ? persistedProfile.headline ?? "" : sampleProfiles[lang].role),
+        location:
+          savedProfile.location ?? (persistedProfile?.location !== undefined ? persistedProfile.location ?? "" : sampleProfiles[lang].location),
+        phone: savedProfile.phone ?? (persistedProfile?.phone !== undefined ? persistedProfile.phone ?? "" : sampleProfiles[lang].phone),
+        summary: savedProfile.comment ?? (persistedProfile?.comment !== undefined ? persistedProfile.comment ?? "" : sampleProfiles[lang].summary),
         basics:
           hasSavedBasics || hasPersistedBasics
             ? {
