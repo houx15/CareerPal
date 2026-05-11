@@ -18,3 +18,5 @@ dist/
 *.db
 *.sqlite
 *.sqlite3
+frontend/test-results/
+frontend/playwright-report/
