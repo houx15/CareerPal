@@ -36,6 +36,9 @@ class GeneratedPagePreview(BaseModel):
     version: int
     is_public: bool
     created_at: datetime
+    source_match_id: str | None = None
+    target_role: str | None = None
+    target_company: str | None = None
 
 
 class GeneratedPageVersion(BaseModel):
@@ -44,6 +47,9 @@ class GeneratedPageVersion(BaseModel):
     version: int
     is_public: bool
     created_at: datetime
+    source_match_id: str | None = None
+    target_role: str | None = None
+    target_company: str | None = None
 
 
 class GeneratedPageVersionsResponse(BaseModel):

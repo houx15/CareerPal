@@ -2,24 +2,28 @@
 
 import { useState } from "react";
 import type { DemoProfile } from "../../fixtures/careerpalDemoData";
-import type { JobMatchAnalysis } from "../../lib/types";
+import type { GeneratedPage, JobMatchAnalysis, PageStyleTemplate } from "../../lib/types";
 import { Slime } from "../Slime";
 
 export function MatchScreen({
   profile,
   jobMatches = [],
   isAnalyzingJobMatch = false,
+  isSavingTargetedVersion = false,
   jobMatchError,
   onCreateJobMatch,
   onOpenJobMatch,
+  onSaveTargetedVersion,
   onJumpGrow,
 }: {
   profile: DemoProfile;
   jobMatches?: JobMatchAnalysis[];
   isAnalyzingJobMatch?: boolean;
+  isSavingTargetedVersion?: boolean;
   jobMatchError?: string | null;
   onCreateJobMatch?: (jobDescription: string) => Promise<JobMatchAnalysis>;
   onOpenJobMatch?: (id: string) => Promise<JobMatchAnalysis>;
+  onSaveTargetedVersion?: (id: string, styleTemplate: PageStyleTemplate) => Promise<GeneratedPage>;
   onJumpGrow?: () => void;
 }) {
   const [jd, setJd] = useState("");
@@ -52,13 +56,30 @@ export function MatchScreen({
     }
   }
 
+  async function saveTargetedVersion(id: string, styleTemplate: PageStyleTemplate): Promise<GeneratedPage> {
+    if (!onSaveTargetedVersion) {
+      throw new Error("Targeted version saving is not available.");
+    }
+    const page = await onSaveTargetedVersion(id, styleTemplate);
+    setResult((current) =>
+      current && current.id === id ? { ...current, saved_page_id: page.id, saved_page_version: page.version } : current,
+    );
+    return page;
+  }
+
   const error = localError ?? jobMatchError;
   const visibleMatches = showAllHistory ? jobMatches : jobMatches.slice(0, 4);
 
   if (result) {
     return (
       <div className="page-pad" data-screen-label="07 Match · Result">
-        <MatchResult analysis={result} onBack={() => setResult(null)} onJumpGrow={onJumpGrow} />
+        <MatchResult
+          analysis={result}
+          isSavingTargetedVersion={isSavingTargetedVersion}
+          onBack={() => setResult(null)}
+          onJumpGrow={onJumpGrow}
+          onSaveTargetedVersion={onSaveTargetedVersion ? saveTargetedVersion : undefined}
+        />
       </div>
     );
   }
@@ -102,7 +123,10 @@ export function MatchScreen({
             {visibleMatches.map((match) => (
               <button className="history-row-btn" type="button" key={match.id} onClick={() => openHistory(match.id)}>
                 <div className="history-row-main">{matchTitle(match)}</div>
-                <div className="history-row-meta">Score {match.score}</div>
+                <div className="history-row-meta">
+                  Score {match.score}
+                  {match.saved_page_version ? ` · Saved version ${match.saved_page_version}` : ""}
+                </div>
               </button>
             ))}
           </div>
@@ -112,7 +136,35 @@ export function MatchScreen({
   );
 }
 
-function MatchResult({ analysis, onBack, onJumpGrow }: { analysis: JobMatchAnalysis; onBack: () => void; onJumpGrow?: () => void }) {
+function MatchResult({
+  analysis,
+  isSavingTargetedVersion,
+  onBack,
+  onJumpGrow,
+  onSaveTargetedVersion,
+}: {
+  analysis: JobMatchAnalysis;
+  isSavingTargetedVersion?: boolean;
+  onBack: () => void;
+  onJumpGrow?: () => void;
+  onSaveTargetedVersion?: (id: string, styleTemplate: PageStyleTemplate) => Promise<GeneratedPage>;
+}) {
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [savedVersion, setSavedVersion] = useState<number | null>(analysis.saved_page_version ?? null);
+
+  async function saveTargetedVersion() {
+    if (!onSaveTargetedVersion) {
+      return;
+    }
+    setSaveError(null);
+    try {
+      const page = await onSaveTargetedVersion(analysis.id, "technical");
+      setSavedVersion(page.version);
+    } catch (caught) {
+      setSaveError(caught instanceof Error ? caught.message : "Could not save targeted version.");
+    }
+  }
+
   return (
     <section className="match-result" style={{ marginTop: 24 }}>
       <div className="match-result-head">
@@ -132,6 +184,18 @@ function MatchResult({ analysis, onBack, onJumpGrow }: { analysis: JobMatchAnaly
           <div>
             <div className="profile-card-title">Match score</div>
             <p>Use this analysis to tailor the resume direction.</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+              <button
+                className="btn btn-accent btn-sm"
+                type="button"
+                disabled={isSavingTargetedVersion || !onSaveTargetedVersion}
+                onClick={saveTargetedVersion}
+              >
+                {isSavingTargetedVersion ? "Saving..." : "Save targeted version"}
+              </button>
+              {savedVersion ? <span className="history-row-meta">Saved as version {savedVersion}</span> : null}
+            </div>
+            {saveError ? <div className="form-error">{saveError}</div> : null}
           </div>
         </article>
         <article className="panel">

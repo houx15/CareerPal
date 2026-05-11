@@ -17,6 +17,9 @@ class GeneratedPage(Base):
     style_template: Mapped[str] = mapped_column(String(80), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    source_match_id: Mapped[str | None] = mapped_column(String(36), index=True, nullable=True)
+    target_role: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    target_company: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

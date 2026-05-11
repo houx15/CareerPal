@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { DemoProfile } from "../../fixtures/careerpalDemoData";
-import type { GeneratedPage, PageStyleTemplate } from "../../lib/types";
+import type { GeneratedPage, GeneratedPageVersion, PageStyleTemplate } from "../../lib/types";
 
 type PageChatMessage = { role: "ai" | "user"; body: string };
 
@@ -15,6 +15,7 @@ const TEMPLATES: Array<{ id: PageStyleTemplate; label: string; color: string; bo
 export function ResumeScreen({
   profile,
   generatedPage,
+  pageVersions = [],
   pageConversationMessages,
   isGeneratingPage = false,
   isExportingPdf = false,
@@ -30,6 +31,7 @@ export function ResumeScreen({
 }: {
   profile: DemoProfile;
   generatedPage?: GeneratedPage | null;
+  pageVersions?: GeneratedPageVersion[];
   pageConversationMessages?: PageChatMessage[];
   isGeneratingPage?: boolean;
   isExportingPdf?: boolean;
@@ -46,6 +48,7 @@ export function ResumeScreen({
   const [selectedTemplate, setSelectedTemplate] = useState<PageStyleTemplate>(generatedPage?.style_template ?? "clean-professional");
   const [customizing, setCustomizing] = useState(false);
   const [instruction, setInstruction] = useState("");
+  const targetedVersions = pageVersions.filter((version) => version.source_match_id);
 
   async function generate() {
     await onGeneratePage?.(selectedTemplate);
@@ -208,6 +211,16 @@ export function ResumeScreen({
             + New version
           </button>
         </div>
+        {targetedVersions.length > 0 ? (
+          <div className="version-grid" style={{ marginTop: 16 }}>
+            {targetedVersions.map((version) => (
+              <article className="panel" key={version.id}>
+                <div className="profile-card-title">{targetTitle(version)}</div>
+                <p className="muted">Version {version.version} · {templateLabel(version.style_template)}</p>
+              </article>
+            ))}
+          </div>
+        ) : null}
       </section>
     </div>
   );
@@ -215,4 +228,11 @@ export function ResumeScreen({
 
 function templateLabel(styleTemplate: PageStyleTemplate): string {
   return TEMPLATES.find((template) => template.id === styleTemplate)?.label ?? styleTemplate;
+}
+
+function targetTitle(version: GeneratedPageVersion): string {
+  if (version.target_role && version.target_company) {
+    return `${version.target_role} at ${version.target_company}`;
+  }
+  return version.target_role ?? version.target_company ?? "Targeted resume version";
 }

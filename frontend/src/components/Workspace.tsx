@@ -4,6 +4,7 @@ import type {
   EducationItem,
   ExperienceItem,
   GeneratedPage,
+  GeneratedPageVersion,
   JobMatchAnalysis,
   PageStyleTemplate,
   ProjectItem,
@@ -44,6 +45,7 @@ interface WorkspaceProps {
   onSendMessage?: (payload: ImproveChatSendPayload) => void | Promise<void>;
   onOpenConversation?: (section: ImproveSection) => void;
   generatedPage?: GeneratedPage | null;
+  pageVersions?: GeneratedPageVersion[];
   pageConversationMessages?: Array<{ role: "ai" | "user"; body: string }>;
   isGeneratingPage?: boolean;
   isExportingPdf?: boolean;
@@ -57,9 +59,11 @@ interface WorkspaceProps {
   onOpenPublicPage?: (url: string) => void;
   jobMatches?: JobMatchAnalysis[];
   isAnalyzingJobMatch?: boolean;
+  isSavingTargetedVersion?: boolean;
   jobMatchError?: string | null;
   onCreateJobMatch?: (jobDescription: string) => Promise<JobMatchAnalysis>;
   onOpenJobMatch?: (id: string) => Promise<JobMatchAnalysis>;
+  onSaveTargetedVersion?: (id: string, styleTemplate: PageStyleTemplate) => Promise<GeneratedPage>;
 }
 
 export function Workspace({
@@ -86,9 +90,12 @@ export function Workspace({
   onOpenPublicPage,
   jobMatches,
   isAnalyzingJobMatch,
+  isSavingTargetedVersion,
   jobMatchError,
   onCreateJobMatch,
   onOpenJobMatch,
+  onSaveTargetedVersion,
+  pageVersions,
 }: WorkspaceProps) {
   const name = profile.name || "CareerPal user";
 
@@ -120,6 +127,7 @@ export function Workspace({
       onSendMessage={onSendMessage}
       onOpenConversation={onOpenConversation}
       generatedPage={generatedPage}
+      pageVersions={pageVersions}
       pageConversationMessages={pageConversationMessages}
       isGeneratingPage={isGeneratingPage}
       isExportingPdf={isExportingPdf}
@@ -133,9 +141,11 @@ export function Workspace({
       onOpenPublicPage={onOpenPublicPage}
       jobMatches={jobMatches}
       isAnalyzingJobMatch={isAnalyzingJobMatch}
+      isSavingTargetedVersion={isSavingTargetedVersion}
       jobMatchError={jobMatchError}
       onCreateJobMatch={onCreateJobMatch}
       onOpenJobMatch={onOpenJobMatch}
+      onSaveTargetedVersion={onSaveTargetedVersion}
       onLogout={onLogout}
       onPatchProfile={async (payload) => {
         const saved = await onPatchProfile(payload);

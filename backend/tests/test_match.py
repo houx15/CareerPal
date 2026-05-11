@@ -1,6 +1,7 @@
 import json
 
 from tests.test_page_generation import auth_headers, update_profile
+from app.models.page import GeneratedPage
 
 
 class CapturingMatchLLMClient:
@@ -12,6 +13,16 @@ class CapturingMatchLLMClient:
         self.messages = messages
         for chunk in self.chunks:
             yield chunk
+
+
+class TargetedPageLLMClient:
+    def __init__(self, html: str = "<!doctype html><html><body>Targeted resume</body></html>"):
+        self.html = html
+        self.messages = None
+
+    async def stream_chat(self, messages):
+        self.messages = list(messages)
+        yield self.html
 
 
 def test_match_analysis_requires_authentication(client):
@@ -237,3 +248,119 @@ def test_match_analysis_rejects_schema_invalid_llm_output_without_persisting(cli
     assert response.status_code == 502
     assert response.json()["detail"] == "LLM provider returned invalid match analysis"
     assert client.get("/api/match/history", headers=headers).json()["analyses"] == []
+
+
+def test_save_targeted_version_creates_page_and_links_match_history(client, db_session, monkeypatch):
+    headers = auth_headers(client)
+    update_profile(client, headers, name="Maya Chen", headline="Backend student")
+    analysis = client.post(
+        "/api/match/analyze",
+        headers=headers,
+        json={"job_description": "Company: Stripe\nRole: Backend Engineering Intern\nPython and SQL role."},
+    ).json()
+    page_llm = TargetedPageLLMClient(
+        "<!doctype html><html><body><h1>Maya Chen</h1><section>Backend Engineering Intern at Stripe</section></body></html>"
+    )
+
+    from app.api import match as match_api
+
+    monkeypatch.setattr(match_api, "build_llm_client", lambda settings: page_llm)
+
+    response = client.post(
+        f"/api/match/{analysis['id']}/save-version",
+        headers=headers,
+        json={"style_template": "technical"},
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["version"] == 1
+    assert body["style_template"] == "technical"
+    assert body["source_match_id"] == analysis["id"]
+    assert body["target_role"] == "Backend Engineering Intern"
+    assert body["target_company"] == "Stripe"
+    assert "Backend Engineering Intern at Stripe" in body["html_content"]
+    prompt_text = "\n".join(message.content for message in page_llm.messages)
+    assert "Match analysis JSON" in prompt_text
+    assert "Add evidence for SQL" in prompt_text
+
+    page = db_session.query(GeneratedPage).one()
+    assert page.source_match_id == analysis["id"]
+    assert page.target_role == "Backend Engineering Intern"
+    assert page.target_company == "Stripe"
+
+    history = client.get("/api/match/history", headers=headers).json()["analyses"]
+    assert history[0]["saved_page_id"] == body["id"]
+    assert history[0]["saved_page_version"] == 1
+
+    versions = client.get("/api/page/versions", headers=headers).json()["versions"]
+    assert versions == [
+        {
+            "id": body["id"],
+            "style_template": "technical",
+            "version": 1,
+            "is_public": False,
+            "created_at": body["created_at"],
+            "source_match_id": analysis["id"],
+            "target_role": "Backend Engineering Intern",
+            "target_company": "Stripe",
+        }
+    ]
+
+
+def test_save_targeted_version_requires_match_ownership(client, monkeypatch):
+    owner_headers = auth_headers(client, email="owner.target@example.com", username="ownertarget")
+    other_headers = auth_headers(client, email="other.target@example.com", username="othertarget")
+    analysis = client.post(
+        "/api/match/analyze",
+        headers=owner_headers,
+        json={"job_description": "Frontend Engineer at Vercel\nReact role."},
+    ).json()
+
+    response = client.post(
+        f"/api/match/{analysis['id']}/save-version",
+        headers=other_headers,
+        json={"style_template": "clean-professional"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Match analysis not found"
+
+
+def test_save_targeted_version_rolls_back_page_when_linking_fails(client, db_session, monkeypatch):
+    headers = auth_headers(client)
+    analysis = client.post(
+        "/api/match/analyze",
+        headers=headers,
+        json={"job_description": "Company: Stripe\nRole: Backend Engineering Intern\nPython and SQL role."},
+    ).json()
+
+    from app.api import match as match_api
+
+    monkeypatch.setattr(match_api, "build_llm_client", lambda settings: TargetedPageLLMClient())
+
+    def fail_after_page_flush(db, current_user, analysis, html_content, style_template):
+        page = GeneratedPage(
+            user_id=current_user.id,
+            html_content=html_content,
+            style_template=style_template,
+            version=1,
+            is_public=False,
+            source_match_id=analysis.id,
+            target_role=analysis.role,
+            target_company=analysis.company,
+        )
+        db.add(page)
+        db.flush()
+        raise RuntimeError("linking failed")
+
+    monkeypatch.setattr(match_api, "_persist_targeted_page_and_link", fail_after_page_flush)
+
+    response = client.post(
+        f"/api/match/{analysis['id']}/save-version",
+        headers=headers,
+        json={"style_template": "technical"},
+    )
+
+    assert response.status_code == 502
+    assert db_session.query(GeneratedPage).count() == 0

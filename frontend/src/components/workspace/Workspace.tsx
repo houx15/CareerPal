@@ -10,6 +10,7 @@ import type {
   EducationItem,
   ExperienceItem,
   GeneratedPage,
+  GeneratedPageVersion,
   JobMatchAnalysis,
   PageStyleTemplate,
   ProfilePatch,
@@ -43,6 +44,7 @@ interface WorkspaceProps {
   onSendMessage?: (payload: ImproveChatSendPayload) => void | Promise<void>;
   onOpenConversation?: (section: ImproveSection) => void;
   generatedPage?: GeneratedPage | null;
+  pageVersions?: GeneratedPageVersion[];
   pageConversationMessages?: Array<{ role: "ai" | "user"; body: string }>;
   isGeneratingPage?: boolean;
   isExportingPdf?: boolean;
@@ -56,9 +58,11 @@ interface WorkspaceProps {
   onOpenPublicPage?: (url: string) => void;
   jobMatches?: JobMatchAnalysis[];
   isAnalyzingJobMatch?: boolean;
+  isSavingTargetedVersion?: boolean;
   jobMatchError?: string | null;
   onCreateJobMatch?: (jobDescription: string) => Promise<JobMatchAnalysis>;
   onOpenJobMatch?: (id: string) => Promise<JobMatchAnalysis>;
+  onSaveTargetedVersion?: (id: string, styleTemplate: PageStyleTemplate) => Promise<GeneratedPage>;
 }
 
 type Tab = "profile" | "match" | "resume" | "grow" | "activity" | "settings";
@@ -95,9 +99,12 @@ export function Workspace({
   onOpenPublicPage,
   jobMatches,
   isAnalyzingJobMatch,
+  isSavingTargetedVersion,
   jobMatchError,
   onCreateJobMatch,
   onOpenJobMatch,
+  onSaveTargetedVersion,
+  pageVersions,
 }: WorkspaceProps) {
   const { t, lang } = useLang();
   const [tab, setTab] = useState<Tab>("profile");
@@ -306,6 +313,7 @@ export function Workspace({
         <ResumeScreen
           profile={profile}
           generatedPage={generatedPage}
+          pageVersions={pageVersions}
           pageConversationMessages={pageConversationMessages}
           isGeneratingPage={isGeneratingPage}
           isExportingPdf={isExportingPdf}
@@ -325,9 +333,11 @@ export function Workspace({
           profile={profile}
           jobMatches={jobMatches}
           isAnalyzingJobMatch={isAnalyzingJobMatch}
+          isSavingTargetedVersion={isSavingTargetedVersion}
           jobMatchError={jobMatchError}
           onCreateJobMatch={onCreateJobMatch}
           onOpenJobMatch={onOpenJobMatch}
+          onSaveTargetedVersion={onSaveTargetedVersion}
           onJumpGrow={() => setTab("grow")}
         />
       ) : null}

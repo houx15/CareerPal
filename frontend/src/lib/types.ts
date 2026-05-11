@@ -174,6 +174,9 @@ export interface GeneratedPage {
   is_public: boolean;
   created_at: string;
   public_url?: string | null;
+  source_match_id?: string | null;
+  target_role?: string | null;
+  target_company?: string | null;
 }
 
 export interface CustomizePagePayload {
@@ -185,6 +188,21 @@ export interface PageSettingsPayload {
   is_public: boolean;
 }
 
+export interface GeneratedPageVersion {
+  id: string;
+  style_template: PageStyleTemplate;
+  version: number;
+  is_public: boolean;
+  created_at: string;
+  source_match_id?: string | null;
+  target_role?: string | null;
+  target_company?: string | null;
+}
+
+export interface GeneratedPageVersionsResponse {
+  versions: GeneratedPageVersion[];
+}
+
 export interface JobMatchAnalysis {
   id: string;
   job_description: string;
@@ -194,6 +212,8 @@ export interface JobMatchAnalysis {
   strengths: string[];
   gaps: string[];
   suggestions: string[];
+  saved_page_id?: string | null;
+  saved_page_version?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -204,4 +224,8 @@ export interface JobMatchHistory {
 
 export interface AnalyzeJobMatchPayload {
   job_description: string;
+}
+
+export interface SaveJobMatchVersionPayload {
+  style_template: PageStyleTemplate;
 }

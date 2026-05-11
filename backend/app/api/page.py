@@ -33,7 +33,7 @@ router = APIRouter(prefix="/page", tags=["page"])
 MAX_PAGE_VERSION_ATTEMPTS = 3
 
 
-@router.post("/generate", response_model=GeneratedPagePreview)
+@router.post("/generate", response_model=GeneratedPagePreview, response_model_exclude_none=True)
 async def generate_page(
     payload: GeneratePageRequest,
     current_user: User = Depends(get_current_user),
@@ -118,7 +118,7 @@ async def customize_page(
     return StreamingResponse(stream(), media_type="text/event-stream")
 
 
-@router.get("/preview", response_model=GeneratedPagePreview)
+@router.get("/preview", response_model=GeneratedPagePreview, response_model_exclude_none=True)
 def get_latest_page_preview(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -129,7 +129,7 @@ def get_latest_page_preview(
     return _page_preview(page)
 
 
-@router.get("/versions", response_model=GeneratedPageVersionsResponse)
+@router.get("/versions", response_model=GeneratedPageVersionsResponse, response_model_exclude_none=True)
 def get_page_versions(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -157,7 +157,7 @@ def export_page_pdf(
     )
 
 
-@router.patch("/settings", response_model=GeneratedPagePreview)
+@router.patch("/settings", response_model=GeneratedPagePreview, response_model_exclude_none=True)
 def update_page_settings(
     payload: PageSettingsRequest,
     current_user: User = Depends(get_current_user),
@@ -201,6 +201,9 @@ def _persist_generated_page(
     current_user: User,
     html_content: str,
     style_template: str,
+    source_match_id: str | None = None,
+    target_role: str | None = None,
+    target_company: str | None = None,
 ) -> GeneratedPage:
     for attempt in range(MAX_PAGE_VERSION_ATTEMPTS):
         page = GeneratedPage(
@@ -209,6 +212,9 @@ def _persist_generated_page(
             style_template=style_template,
             version=_next_page_version(db, current_user),
             is_public=False,
+            source_match_id=source_match_id,
+            target_role=target_role,
+            target_company=target_company,
         )
         db.add(page)
         try:
@@ -234,6 +240,9 @@ def _page_preview(page: GeneratedPage) -> GeneratedPagePreview:
         version=page.version,
         is_public=page.is_public,
         created_at=page.created_at,
+        source_match_id=page.source_match_id,
+        target_role=page.target_role,
+        target_company=page.target_company,
     )
 
 
@@ -244,4 +253,7 @@ def _page_version(page: GeneratedPage) -> GeneratedPageVersion:
         version=page.version,
         is_public=page.is_public,
         created_at=page.created_at,
+        source_match_id=page.source_match_id,
+        target_role=page.target_role,
+        target_company=page.target_company,
     )

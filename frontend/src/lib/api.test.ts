@@ -212,6 +212,37 @@ describe("ApiClient", () => {
     });
   });
 
+  it("lists generated page versions with bearer auth", async () => {
+    const versions = {
+      versions: [
+        {
+          id: "page-2",
+          style_template: "technical",
+          version: 2,
+          is_public: false,
+          created_at: "2026-05-08T00:02:00Z",
+          source_match_id: "match-1",
+          target_role: "Backend Intern",
+          target_company: "Stripe",
+        },
+      ],
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ "Content-Type": "application/json" }),
+      json: async () => versions,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.listPageVersions();
+
+    expect(result).toEqual(versions);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/page/versions", {
+      headers: { Authorization: "Bearer token-123" },
+    });
+  });
+
 
   it("customizes a profile page from an SSE done payload with bearer auth", async () => {
     const page = {
@@ -392,6 +423,36 @@ describe("ApiClient", () => {
     expect(result).toEqual(analysis);
     expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/match/match-1", {
       headers: { Authorization: "Bearer token-123" },
+    });
+  });
+
+  it("saves a targeted version from a job match with bearer auth", async () => {
+    const page = {
+      id: "page-2",
+      html_content: "<!doctype html><html><body>Backend Intern at Stripe</body></html>",
+      style_template: "technical",
+      version: 2,
+      is_public: false,
+      created_at: "2026-05-08T00:02:00Z",
+      source_match_id: "match-1",
+      target_role: "Backend Intern",
+      target_company: "Stripe",
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 201,
+      headers: new Headers({ "Content-Type": "application/json" }),
+      json: async () => page,
+    });
+    const client = new ApiClient("http://api.test", () => "token-123", fetchMock as typeof fetch);
+
+    const result = await client.saveJobMatchVersion("match-1", { style_template: "technical" });
+
+    expect(result).toEqual(page);
+    expect(fetchMock).toHaveBeenCalledWith("http://api.test/api/match/match-1/save-version", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer token-123" },
+      body: JSON.stringify({ style_template: "technical" }),
     });
   });
 

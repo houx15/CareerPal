@@ -7,6 +7,7 @@ import type {
   JobMatchHistory,
   Conversation,
   LoginPayload,
+  GeneratedPageVersionsResponse,
   PageSettingsPayload,
   Profile,
   ProfileCompleteness,
@@ -16,6 +17,7 @@ import type {
   ResumeUploadResponse,
   SendMessagePayload,
   SendMessageResponse,
+  SaveJobMatchVersionPayload,
   StartConversationPayload,
   PageStyleTemplate,
   User,
@@ -108,6 +110,10 @@ export class ApiClient {
     return this.request("/api/page/preview", { auth: true });
   }
 
+  listPageVersions(): Promise<GeneratedPageVersionsResponse> {
+    return this.request("/api/page/versions", { auth: true });
+  }
+
   customizePage(payload: CustomizePagePayload): Promise<GeneratedPage> {
     return this.request("/api/page/customize", { method: "POST", body: payload, auth: true });
   }
@@ -126,6 +132,10 @@ export class ApiClient {
 
   getJobMatch(id: string): Promise<JobMatchAnalysis> {
     return this.request(`/api/match/${id}`, { auth: true });
+  }
+
+  saveJobMatchVersion(id: string, payload: SaveJobMatchVersionPayload): Promise<GeneratedPage> {
+    return this.request(`/api/match/${id}/save-version`, { method: "POST", body: payload, auth: true });
   }
 
   exportProfilePdf(): Promise<PdfExport> {

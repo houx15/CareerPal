@@ -19,6 +19,8 @@ class JobDescriptionAnalysis(Base):
     strengths: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     gaps: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     suggestions: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    saved_page_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    saved_page_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

@@ -9,6 +9,8 @@ import type {
   ConversationMessage,
   CustomizePagePayload,
   GeneratedPage,
+  GeneratedPageVersion,
+  GeneratedPageVersionsResponse,
   JobMatchAnalysis,
   JobMatchHistory,
   PageStyleTemplate,
@@ -16,6 +18,7 @@ import type {
   ResumeStructureResponse,
   ResumeUploadResponse,
   PageSettingsPayload,
+  SaveJobMatchVersionPayload,
 } from "../lib/types";
 import { LoginScreen, NameIntro, SignUpScreen } from "./AuthScreens";
 import { IntroPage } from "./IntroPage";
@@ -45,12 +48,14 @@ export interface StageApi {
   structureResume?(resumeId: string): Promise<ResumeStructureResponse>;
   getPagePreview?(): Promise<GeneratedPage>;
   generatePage?(styleTemplate: PageStyleTemplate): Promise<GeneratedPage>;
+  listPageVersions?(): Promise<GeneratedPageVersionsResponse>;
   customizePage?(payload: CustomizePagePayload): Promise<GeneratedPage>;
   updatePageSettings?(payload: PageSettingsPayload): Promise<GeneratedPage>;
   exportProfilePdf?(): Promise<PdfExport>;
   analyzeJobMatch?(payload: AnalyzeJobMatchPayload): Promise<JobMatchAnalysis>;
   listJobMatches?(): Promise<JobMatchHistory>;
   getJobMatch?(id: string): Promise<JobMatchAnalysis>;
+  saveJobMatchVersion?(id: string, payload: SaveJobMatchVersionPayload): Promise<GeneratedPage>;
 }
 
 interface StageAppProps {
@@ -80,11 +85,13 @@ function StageAppInner({ api }: StageAppProps) {
   const [improveConversation, setImproveConversation] = useState<Conversation | null>(null);
   const [pageConversation, setPageConversation] = useState<Conversation | null>(null);
   const [generatedPage, setGeneratedPage] = useState<GeneratedPage | null>(null);
+  const [pageVersions, setPageVersions] = useState<GeneratedPageVersion[]>([]);
   const [isGeneratingPage, setIsGeneratingPage] = useState(false);
   const [isUpdatingPageVisibility, setIsUpdatingPageVisibility] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [jobMatches, setJobMatches] = useState<JobMatchAnalysis[]>([]);
   const [isAnalyzingJobMatch, setIsAnalyzingJobMatch] = useState(false);
+  const [isSavingTargetedVersion, setIsSavingTargetedVersion] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [jobMatchError, setJobMatchError] = useState<string | null>(null);
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(false);
@@ -130,11 +137,12 @@ function StageAppInner({ api }: StageAppProps) {
     setWorkspaceError(null);
 
     try {
-      const [nextProfile, nextCompleteness, conversation, latestPage, latestMatches] = await Promise.all([
+      const [nextProfile, nextCompleteness, conversation, latestPage, latestPageVersions, latestMatches] = await Promise.all([
         client.getProfile(),
         client.getCompleteness(),
         ensureCareerConversation(null),
         loadLatestPagePreview(),
+        loadPageVersions(),
         loadJobMatchHistory(),
       ]);
       if (workspaceRequestIdRef.current !== requestId) {
@@ -145,6 +153,7 @@ function StageAppInner({ api }: StageAppProps) {
       setCompleteness(nextCompleteness);
       setOnboardingConversation(conversation ?? null);
       setGeneratedPage(latestPage);
+      setPageVersions(latestPageVersions);
       setJobMatches(latestMatches);
       if (workspaceRequestIdRef.current !== requestId) {
         return;
@@ -171,11 +180,13 @@ function StageAppInner({ api }: StageAppProps) {
     setImproveConversation(null);
     setPageConversation(null);
     setGeneratedPage(null);
+    setPageVersions([]);
     setIsGeneratingPage(false);
     setIsUpdatingPageVisibility(false);
     setIsExportingPdf(false);
     setJobMatches([]);
     setIsAnalyzingJobMatch(false);
+    setIsSavingTargetedVersion(false);
     setPageError(null);
     setJobMatchError(null);
     setPendingEmail("");
@@ -243,6 +254,19 @@ function StageAppInner({ api }: StageAppProps) {
       return response.analyses;
     } catch (caught) {
       setJobMatchError(caught instanceof Error ? caught.message : "Could not load recent matches.");
+      return [];
+    }
+  }
+
+  async function loadPageVersions(): Promise<GeneratedPageVersion[]> {
+    if (!client.listPageVersions) {
+      return [];
+    }
+
+    try {
+      const response = await client.listPageVersions();
+      return response.versions;
+    } catch {
       return [];
     }
   }
@@ -344,7 +368,9 @@ function StageAppInner({ api }: StageAppProps) {
     setPageError(null);
 
     try {
-      setGeneratedPage(await client.generatePage(styleTemplate));
+      const nextPage = await client.generatePage(styleTemplate);
+      setGeneratedPage(nextPage);
+      setPageVersions((current) => upsertPageVersion(current, nextPage));
     } catch (caught) {
       setPageError(caught instanceof Error ? caught.message : "Could not generate your page.");
     } finally {
@@ -368,6 +394,7 @@ function StageAppInner({ api }: StageAppProps) {
 
       const nextPage = await client.customizePage({ conversation_id: conversation.id, instruction });
       setGeneratedPage(nextPage);
+      setPageVersions((current) => upsertPageVersion(current, nextPage));
       if (client.getConversation) {
         setPageConversation(await client.getConversation(conversation.id));
       }
@@ -458,6 +485,33 @@ function StageAppInner({ api }: StageAppProps) {
     }
   }
 
+  async function handleSaveTargetedVersion(id: string, styleTemplate: PageStyleTemplate): Promise<GeneratedPage> {
+    if (!client.saveJobMatchVersion) {
+      throw new Error("Targeted version saving is not available.");
+    }
+
+    setIsSavingTargetedVersion(true);
+    setJobMatchError(null);
+
+    try {
+      const page = await client.saveJobMatchVersion(id, { style_template: styleTemplate });
+      setGeneratedPage(page);
+      setPageVersions((current) => upsertPageVersion(current, page));
+      setJobMatches((current) =>
+        current.map((match) =>
+          match.id === id ? { ...match, saved_page_id: page.id, saved_page_version: page.version } : match,
+        ),
+      );
+      return page;
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : "Could not save targeted version.";
+      setJobMatchError(message);
+      throw new Error(message);
+    } finally {
+      setIsSavingTargetedVersion(false);
+    }
+  }
+
   function handleOpenPublicPage(url: string): void {
     if (typeof window === "undefined") {
       return;
@@ -536,6 +590,7 @@ function StageAppInner({ api }: StageAppProps) {
       onSendMessage={handleImproveMessage}
       onOpenConversation={handleOpenImproveConversation}
       generatedPage={generatedPageForWorkspace}
+      pageVersions={pageVersions}
       pageConversationMessages={pageConversation ? toImproveMessages(pageConversation.messages) : undefined}
       isGeneratingPage={isGeneratingPage}
       isExportingPdf={isExportingPdf}
@@ -543,6 +598,7 @@ function StageAppInner({ api }: StageAppProps) {
       pageError={pageError}
       jobMatches={jobMatches}
       isAnalyzingJobMatch={isAnalyzingJobMatch}
+      isSavingTargetedVersion={isSavingTargetedVersion}
       jobMatchError={jobMatchError}
       onGeneratePage={handleGeneratePage}
       onExportPdf={handleDownloadPdf}
@@ -552,6 +608,7 @@ function StageAppInner({ api }: StageAppProps) {
       onOpenPublicPage={handleOpenPublicPage}
       onCreateJobMatch={handleCreateJobMatch}
       onOpenJobMatch={handleOpenJobMatch}
+      onSaveTargetedVersion={handleSaveTargetedVersion}
       onLogout={handleLogout}
       onPatchProfile={handlePatchProfile}
     />
@@ -571,6 +628,20 @@ function toImproveMessages(messages: ConversationMessage[]): Array<{ role: "ai" 
     role: message.role === "assistant" ? "ai" : "user",
     body: message.content,
   }));
+}
+
+function upsertPageVersion(versions: GeneratedPageVersion[], page: GeneratedPage): GeneratedPageVersion[] {
+  const nextVersion: GeneratedPageVersion = {
+    id: page.id,
+    style_template: page.style_template,
+    version: page.version,
+    is_public: page.is_public,
+    created_at: page.created_at,
+    source_match_id: page.source_match_id,
+    target_role: page.target_role,
+    target_company: page.target_company,
+  };
+  return [nextVersion, ...versions.filter((version) => version.id !== page.id)].sort((a, b) => b.version - a.version);
 }
 
 export function defaultApiBaseUrl(): string {

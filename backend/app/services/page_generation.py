@@ -74,6 +74,20 @@ async def generate_page_html(
     return validate_page_html(html)
 
 
+async def generate_targeted_page_html(
+    llm_client: LLMClient,
+    profile_payload: dict[str, Any],
+    match_payload: dict[str, Any],
+    style_template: StyleTemplate,
+) -> str:
+    messages = build_targeted_page_generation_messages(profile_payload, match_payload, style_template)
+    chunks = []
+    async for chunk in llm_client.stream_chat(messages):
+        chunks.append(chunk)
+    html = "".join(chunks).strip()
+    return validate_page_html(html)
+
+
 def validate_page_html(html: str) -> str:
     if not html:
         raise ValueError("LLM returned empty page HTML")
@@ -125,6 +139,44 @@ def build_page_generation_messages(
                 "- Structure: header with name/headline, then only the sections present in the profile data\n"
                 "- Each section should be engaging and visually distinct, not a plain list\n"
                 "- Include subtle interactions such as hover effects or smooth scrolls, but no JavaScript frameworks\n"
+                "- Output HTML only, with no markdown fences or explanation"
+            ),
+        ),
+    ]
+
+
+def build_targeted_page_generation_messages(
+    profile_payload: dict[str, Any],
+    match_payload: dict[str, Any],
+    style_template: StyleTemplate,
+) -> list[LLMMessage]:
+    filtered_payload = filtered_profile_payload(profile_payload)
+    profile_json = json.dumps(filtered_payload, ensure_ascii=False, default=str, indent=2)
+    match_json = json.dumps(match_payload, ensure_ascii=False, default=str, indent=2)
+    return [
+        LLMMessage(
+            role="system",
+            content=(
+                "You are a resume web designer creating a targeted resume version from a saved job match. "
+                "Return only complete self-contained HTML with inline CSS."
+            ),
+        ),
+        LLMMessage(
+            role="user",
+            content=(
+                "Student profile data:\n"
+                f"{profile_json}\n\n"
+                "Match analysis JSON:\n"
+                f"{match_json}\n\n"
+                "Style reference:\n"
+                f"{STYLE_REFERENCES[style_template]}\n\n"
+                "Rules:\n"
+                "- Generate a complete, self-contained targeted resume page with inline CSS\n"
+                "- Prioritize profile evidence that addresses the target role, strengths, gaps, and suggestions\n"
+                "- Only use information from the provided profile and match analysis - never invent content\n"
+                "- Make the target company and role visible near the top when provided\n"
+                "- The page must be responsive for mobile and desktop\n"
+                "- Follow the visual style of the reference closely\n"
                 "- Output HTML only, with no markdown fences or explanation"
             ),
         ),

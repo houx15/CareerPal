@@ -15,8 +15,22 @@ const matchAnalysis: JobMatchAnalysis = {
   strengths: ["React aligns with your skills."],
   gaps: ["Add more TypeScript evidence."],
   suggestions: ["Highlight shipped UI work."],
+  saved_page_id: null,
+  saved_page_version: null,
   created_at: "2026-05-08T00:00:00Z",
   updated_at: "2026-05-08T00:00:00Z",
+};
+
+const targetedPageVersion = {
+  id: "page-target-1",
+  html_content: "<!doctype html><html><body><h1>Frontend Engineer at Vercel</h1></body></html>",
+  style_template: "technical" as const,
+  version: 2,
+  is_public: false,
+  created_at: "2026-05-08T00:02:00Z",
+  source_match_id: "match-1",
+  target_role: "Frontend Engineer",
+  target_company: "Vercel",
 };
 
 function apiMock() {
@@ -93,6 +107,8 @@ function apiMock() {
     listJobMatches: vi.fn().mockResolvedValue({ analyses: [] }),
     analyzeJobMatch: vi.fn().mockResolvedValue(matchAnalysis),
     getJobMatch: vi.fn().mockResolvedValue(matchAnalysis),
+    listPageVersions: vi.fn().mockResolvedValue({ versions: [] }),
+    saveJobMatchVersion: vi.fn().mockResolvedValue(targetedPageVersion),
   };
 }
 
@@ -438,6 +454,34 @@ describe("StageApp", () => {
     expect(await screen.findByRole("heading", { name: "Frontend Engineer at Vercel" })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /back/i }));
     expect(screen.getByRole("button", { name: /frontend engineer at vercel/i })).toBeInTheDocument();
+  }, 10000);
+
+  it("saves a targeted match version and shows it in resume history", async () => {
+    const api = apiMock();
+    render(<StageApp api={api} />);
+
+    await userEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await userEvent.type(screen.getByLabelText(/^email$/i), "alex@example.com");
+    await userEvent.type(screen.getByLabelText(/^password$/i), "secret123");
+    await userEvent.click(screen.getByRole("button", { name: /log in/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /match/i }));
+
+    await userEvent.type(
+      await screen.findByRole("textbox", { name: /job description/i }),
+      "Company: Vercel\nRole: Frontend Engineer\nReact and TypeScript role.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: /analyze/i }));
+    await userEvent.click(await screen.findByRole("button", { name: /save targeted version/i }));
+
+    await waitFor(() =>
+      expect(api.saveJobMatchVersion).toHaveBeenCalledWith("match-1", { style_template: "technical" }),
+    );
+    expect(await screen.findByText(/saved as version 2/i)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /my resume/i }));
+
+    expect(await screen.findByText(/Frontend Engineer at Vercel/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Version 2 · Terminal/i).length).toBeGreaterThan(0);
   }, 10000);
 
   it("shows an export error when PDF download fails", async () => {

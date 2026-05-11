@@ -3,6 +3,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.schemas.page import StyleTemplate
+
 
 class JobDescriptionAnalyzeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -29,9 +31,17 @@ class JobDescriptionAnalysisResponse(BaseModel):
     strengths: list[str]
     gaps: list[str]
     suggestions: list[str]
+    saved_page_id: str | None = None
+    saved_page_version: int | None = None
     created_at: datetime
     updated_at: datetime
 
 
 class JobDescriptionHistoryResponse(BaseModel):
     analyses: list[JobDescriptionAnalysisResponse]
+
+
+class SaveTargetedVersionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    style_template: StyleTemplate = "technical"
